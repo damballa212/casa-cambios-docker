@@ -7,16 +7,18 @@ Este proyecto está completamente dockerizado para facilitar el despliegue en Ea
 ## 📦 Arquitectura Docker
 
 ### Servicios:
-- **Frontend**: React + Vite + Nginx (Puerto 8847)
+- **Frontend**: React + Vite + Nginx (Puerto asignado por EasyPanel)
 - **Backend**: Node.js + Express (Puerto 3001 interno)
 - **Redis**: Cache y Rate Limiting (Puerto 6379 interno)
 
 ### Archivos Docker:
 - `Dockerfile.frontend` - Imagen del frontend
 - `Dockerfile.backend` - Imagen del backend
-- `docker-compose.yml` - Orquestación completa
+- `docker-compose.yml` - Orquestación completa (desarrollo)
+- `docker-compose.easypanel.yml` - Configuración optimizada para EasyPanel
 - `.dockerignore` - Optimización de builds
 - `.env.docker` - Variables de entorno template
+- `.env` - Variables de entorno con valores por defecto
 
 ## 🚀 Instalación Rápida
 
@@ -72,10 +74,10 @@ git push -u origin main
 ### Paso 2: Configurar en EasyPanel
 
 1. **Crear nuevo servicio** → **Compose**
-2. **Repository**: `https://github.com/tu-usuario/casa-cambios.git`
+2. **Repository**: `https://github.com/damballa212/casa-cambios-docker.git`
 3. **Branch**: `main`
-4. **Compose File**: `docker-compose.yml`
-5. **Port**: `8847`
+4. **Compose File**: `docker-compose.easypanel.yml` (⚠️ Usar este archivo específico)
+5. **Port**: EasyPanel asignará automáticamente un puerto disponible
 
 ### Paso 3: Variables de Entorno en EasyPanel
 
@@ -180,6 +182,19 @@ docker-compose logs frontend --tail=50
 4. **Monitorear logs** regularmente
 5. **Actualizar imágenes** periódicamente
 
+## ⚠️ Problemas Resueltos
+
+### Conflictos de Container Names:
+✅ **Solucionado**: Removidos `container_name` del docker-compose.yml
+✅ **EasyPanel**: Usar `docker-compose.easypanel.yml` para evitar conflictos
+
+### Variables de Entorno No Configuradas:
+✅ **Solucionado**: Creado archivo `.env` con valores por defecto
+✅ **Seguridad**: Archivo `.env` está en `.gitignore`
+
+### Versión Obsoleta de Docker Compose:
+✅ **Solucionado**: Removida línea `version: '3.8'` obsoleta
+
 ## 🚨 Troubleshooting
 
 ### Problemas Comunes:
@@ -242,9 +257,9 @@ cp docker-compose.yml docker-compose.override.yml
 
 ## 🌐 URLs de Acceso
 
-- **Dashboard**: `http://localhost:8847`
-- **API Health**: `http://localhost:8847/api/health`
-- **API Docs**: `http://localhost:8847/api`
+- **Dashboard**: `http://tu-dominio-easypanel.com` (puerto asignado automáticamente)
+- **API Health**: `http://tu-dominio-easypanel.com/api/health`
+- **API Docs**: `http://tu-dominio-easypanel.com/api`
 
 ## 📞 Soporte
 

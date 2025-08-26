@@ -1,3 +1,6 @@
+# Docker Compose optimizado para EasyPanel
+# Este archivo resuelve los conflictos de container_name y puertos
+
 services:
   # Backend API
   backend:
@@ -28,7 +31,7 @@ services:
     volumes:
       - backend_logs:/app/logs
     networks:
-      - casa-cambios-network
+      - app-network
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
@@ -43,12 +46,12 @@ services:
       dockerfile: Dockerfile.frontend
     restart: unless-stopped
     expose:
-      - "80"  # Puerto expuesto internamente
+      - "80"  # EasyPanel asignará puerto automáticamente
     depends_on:
       backend:
         condition: service_healthy
     networks:
-      - casa-cambios-network
+      - app-network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
       interval: 30s
@@ -56,15 +59,15 @@ services:
       retries: 3
       start_period: 40s
 
-  # Redis para Rate Limiting (opcional)
+  # Redis para Rate Limiting
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-defaultpassword}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-casa_cambios_redis_password_2024}
     volumes:
       - redis_data:/data
     networks:
-      - casa-cambios-network
+      - app-network
     healthcheck:
       test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
       interval: 30s
@@ -78,24 +81,5 @@ volumes:
     driver: local
 
 networks:
-  casa-cambios-network:
+  app-network:
     driver: bridge
-    name: casa-cambios-network
-
-# Configuración adicional para EasyPanel
-x-easypanel:
-  name: casa-cambios
-  description: "Sistema completo de Casa de Cambios con Dashboard y API"
-  version: "1.0.0"
-  ports:
-    - "8847:80"
-  environment:
-    - SUPABASE_URL
-    - SUPABASE_ANON_KEY
-    - SUPABASE_SERVICE_ROLE_KEY
-    - DATABASE_URL
-    - JWT_SECRET
-    - REDIS_PASSWORD
-  volumes:
-    - backend_logs
-    - redis_data
