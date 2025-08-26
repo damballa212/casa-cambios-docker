@@ -1,0 +1,59 @@
+# Dockerfile para Backend Node.js + Express
+FROM node:18-alpine
+
+# Instalar dependencias del sistema necesarias para algunas librerías
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    freetype-dev \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    git
+
+# Configurar Puppeteer para usar Chromium instalado
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# Crear usuario no-root para seguridad
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nodejs -u 1001
+
+# Establecer directorio de trabajo
+WORKDIR /app
+
+# Cambiar propietario del directorio
+RUN chown -R nodejs:nodejs /app
+USER nodejs
+
+# Copiar archivos de configuración
+COPY --chown=nodejs:nodejs server/package*.json ./
+
+# Instalar dependencias
+RUN npm ci --only=production && npm cache clean --force
+
+# Copiar código fuente del servidor
+COPY --chown=nodejs:nodejs server/ ./
+
+# Crear directorio para logs
+RUN mkdir -p logs
+
+# Exponer puerto
+EXPOSE 3001
+
+# Variables de entorno por defecto
+ENV NODE_ENV=production
+ENV PORT=3001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+
+# Comando por defecto
+CMD ["node", "server.js"]
+
+# Metadata
+LABEL maintainer="Casa de Cambios Team"
+LABEL description="Backend API Node.js + Express para Casa de Cambios"
+LABEL version="1.0.0"

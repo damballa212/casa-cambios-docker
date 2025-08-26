@@ -1,0 +1,957 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Search, 
+  Filter, 
+  Download, 
+  Eye, 
+  CheckCircle, 
+  Clock, 
+  XCircle,
+  DollarSign,
+  User
+} from 'lucide-react';
+import AdvancedFilters, { FilterConfig } from './AdvancedFilters';
+import ExportModal, { ExportConfig } from './ExportModal';
+import jsPDF from 'jspdf';
+
+interface Transaction {
+  id: string;
+  fecha: string;
+  cliente: string;
+  colaborador: string;
+  usdTotal: number;
+  comision: number;
+  usdNeto: number;
+  montoGs: number;
+  tasaUsada: number;
+  status: string;
+  chatId: string;
+  idempotencyKey: string;
+  gananciaGabriel?: number; // Ganancia específica de Gabriel
+}
+
+const TransactionsList: React.FC = () => {
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isFilterLoading, setIsFilterLoading] = useState(false);
+  
+  // Estado de filtros avanzados
+  const [filters, setFilters] = useState<FilterConfig>({
+    search: '',
+    dateRange: {
+      start: '',
+      end: '',
+      preset: ''
+    },
+    collaborator: '',
+    client: '',
+    status: '',
+    amountRange: {
+      min: null,
+      max: null
+    },
+    commissionRange: {
+      min: null,
+      max: null
+    },
+    rateRange: {
+      min: null,
+      max: null
+    }
+  });
+
+  // Cargar transacciones desde el API
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/transactions');
+        if (!response.ok) {
+          throw new Error('Error al cargar transacciones');
+        }
+        const data = await response.json();
+        // Calcular ganancia de Gabriel para cada transacción
+        const transactionsWithGanancia = data.map((transaction: Transaction) => {
+          // Gabriel gana la diferencia entre la comisión total y lo que se paga al colaborador
+          // Comisión total = usdTotal * (comision / 100)
+          // Ganancia Gabriel = Comisión total - Comisión del colaborador
+          const comisionTotal = transaction.usdTotal * (transaction.comision / 100);
+          const gananciaGabriel = comisionTotal; // Por ahora toda la comisión va a Gabriel
+          
+          return {
+            ...transaction,
+            gananciaGabriel: gananciaGabriel
+          };
+        });
+        setTransactions(transactionsWithGanancia);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching transactions:', err);
+        setError('Error al cargar las transacciones');
+        // Sin datos de fallback - mostrar error
+         setTransactions([]);
+       } finally {
+         setLoading(false);
+       }
+     };
+
+     fetchTransactions();
+   }, []);
+
+  // Aplicar filtros avanzados
+  useEffect(() => {
+    setIsFilterLoading(true);
+    
+    // Simular delay para mostrar loading
+    const filterTimeout = setTimeout(() => {
+      let filtered = transactions;
+
+      // Filtro de búsqueda
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase();
+        filtered = filtered.filter(transaction =>
+          transaction.cliente.toLowerCase().includes(searchLower) ||
+          transaction.colaborador.toLowerCase().includes(searchLower) ||
+          transaction.id.toLowerCase().includes(searchLower) ||
+          transaction.usdTotal.toString().includes(searchLower) ||
+          transaction.montoGs.toString().includes(searchLower)
+        );
+      }
+
+      // Filtro de rango de fechas
+      if (filters.dateRange.start || filters.dateRange.end) {
+        filtered = filtered.filter(transaction => {
+          const transactionDate = new Date(transaction.fecha).toISOString().split('T')[0];
+          const startDate = filters.dateRange.start;
+          const endDate = filters.dateRange.end;
+          
+          if (startDate && endDate) {
+            return transactionDate >= startDate && transactionDate <= endDate;
+          } else if (startDate) {
+            return transactionDate >= startDate;
+          } else if (endDate) {
+            return transactionDate <= endDate;
+          }
+          return true;
+        });
+      }
+
+      // Filtro de colaborador
+      if (filters.collaborator) {
+        filtered = filtered.filter(transaction => transaction.colaborador === filters.collaborator);
+      }
+
+      // Filtro de cliente
+      if (filters.client) {
+        filtered = filtered.filter(transaction => transaction.cliente === filters.client);
+      }
+
+      // Filtro de estado
+      if (filters.status) {
+        filtered = filtered.filter(transaction => transaction.status === filters.status);
+      }
+
+      // Filtro de rango de monto
+      if (filters.amountRange.min !== null || filters.amountRange.max !== null) {
+        filtered = filtered.filter(transaction => {
+          const amount = transaction.usdTotal;
+          if (filters.amountRange.min !== null && filters.amountRange.max !== null) {
+            return amount >= filters.amountRange.min && amount <= filters.amountRange.max;
+          } else if (filters.amountRange.min !== null) {
+            return amount >= filters.amountRange.min;
+          } else if (filters.amountRange.max !== null) {
+            return amount <= filters.amountRange.max;
+          }
+          return true;
+        });
+      }
+
+      // Filtro de rango de comisión
+      if (filters.commissionRange.min !== null || filters.commissionRange.max !== null) {
+        filtered = filtered.filter(transaction => {
+          const commission = transaction.comision;
+          if (filters.commissionRange.min !== null && filters.commissionRange.max !== null) {
+            return commission >= filters.commissionRange.min && commission <= filters.commissionRange.max;
+          } else if (filters.commissionRange.min !== null) {
+            return commission >= filters.commissionRange.min;
+          } else if (filters.commissionRange.max !== null) {
+            return commission <= filters.commissionRange.max;
+          }
+          return true;
+        });
+      }
+
+      // Filtro de rango de tasa
+      if (filters.rateRange.min !== null || filters.rateRange.max !== null) {
+        filtered = filtered.filter(transaction => {
+          const rate = transaction.tasaUsada;
+          if (filters.rateRange.min !== null && filters.rateRange.max !== null) {
+            return rate >= filters.rateRange.min && rate <= filters.rateRange.max;
+          } else if (filters.rateRange.min !== null) {
+            return rate >= filters.rateRange.min;
+          } else if (filters.rateRange.max !== null) {
+            return rate <= filters.rateRange.max;
+          }
+          return true;
+        });
+      }
+
+      setFilteredTransactions(filtered);
+      setIsFilterLoading(false);
+    }, 300);
+
+    return () => clearTimeout(filterTimeout);
+  }, [transactions, filters]);
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'processing':
+        return <Clock className="w-4 h-4 text-yellow-500" />;
+      case 'error':
+        return <XCircle className="w-4 h-4 text-red-500" />;
+      default:
+        return <Clock className="w-4 h-4 text-gray-500" />;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-100 text-green-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'failed':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  // Función para manejar la exportación
+  const handleExport = async (config: ExportConfig) => {
+    try {
+      // Simular proceso de exportación
+      console.log('Exportando con configuración:', config);
+      
+      // Simular delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      const timestamp = new Date().toISOString().split('T')[0];
+      const baseFilename = config.customFilename || `transacciones_${timestamp}`;
+      
+      // Generar y descargar archivo según el formato
+      switch (config.format) {
+        case 'csv':
+          const csvContent = generateCSV(filteredTransactions, config);
+          downloadFile(csvContent, `${baseFilename}.csv`, 'text/csv');
+          break;
+          
+        case 'excel':
+          const excelContent = generateExcel(filteredTransactions, config);
+          downloadFile(excelContent, `${baseFilename}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+          break;
+          
+        case 'json':
+          const jsonContent = generateJSON(filteredTransactions, config);
+          downloadFile(jsonContent, `${baseFilename}.json`, 'application/json');
+          break;
+          
+        case 'pdf':
+            const pdfContent = generatePDF(filteredTransactions, config);
+            downloadFile(pdfContent, `${baseFilename}.pdf`, 'application/pdf');
+            break;
+          
+        default:
+          throw new Error(`Formato no soportado: ${config.format}`);
+      }
+      
+      console.log('Exportación completada');
+    } catch (error) {
+      console.error('Error en exportación:', error);
+      throw error;
+    }
+  };
+
+  // Mapeo de campos para headers
+  const getFieldMap = () => ({
+    'id': 'ID',
+    'fecha': 'Fecha',
+    'cliente': 'Cliente',
+    'colaborador': 'Colaborador',
+    'usdTotal': 'USD Total',
+    'comision': 'Comisión %',
+    'usdNeto': 'USD Neto',
+    'montoGs': 'Monto Gs',
+    'tasaUsada': 'Tasa Usada',
+    'status': 'Estado',
+    'chatId': 'Chat ID',
+    'gananciaGabriel': 'Ganancia Gabriel',
+     'gananciaGabrielTotal': 'Ganancia Gabriel Total'
+  });
+
+  // Generar CSV
+  const generateCSV = (data: Transaction[], config: ExportConfig) => {
+    const fieldMap = getFieldMap();
+    const headers = config.fields.map(field => fieldMap[field as keyof typeof fieldMap] || field);
+    
+    const rows = data.map(transaction => 
+      config.fields.map(field => {
+        const value = (transaction as any)[field];
+        return typeof value === 'string' && value.includes(',') ? `"${value}"` : value;
+      })
+    );
+    
+    const csvContent = [headers, ...rows]
+      .map(row => row.join(','))
+      .join('\n');
+    
+    return csvContent;
+  };
+
+  // Generar Excel (simulado como CSV con diferentes headers)
+  const generateExcel = (data: Transaction[], config: ExportConfig) => {
+    // Para una implementación real, usarías una librería como xlsx
+    // Por ahora, generamos un CSV que Excel puede abrir
+    const fieldMap = getFieldMap();
+    const headers = config.fields.map(field => fieldMap[field as keyof typeof fieldMap] || field);
+    
+    const rows = data.map(transaction => 
+      config.fields.map(field => {
+        const value = (transaction as any)[field];
+        return typeof value === 'string' && value.includes(',') ? `"${value}"` : value;
+      })
+    );
+    
+    let content = '';
+    if (config.includeMetadata) {
+      content += `Reporte de Transacciones\n`;
+      content += `Generado: ${new Date().toLocaleString()}\n`;
+      content += `Total de registros: ${data.length}\n\n`;
+    }
+    
+    content += [headers, ...rows]
+      .map(row => row.join(','))
+      .join('\n');
+    
+    return content;
+  };
+
+  // Generar JSON
+  const generateJSON = (data: Transaction[], config: ExportConfig) => {
+    const fieldMap = getFieldMap();
+    
+    const exportData = data.map(transaction => {
+      const item: any = {};
+      config.fields.forEach(field => {
+          // Saltar gananciaGabrielTotal en datos de transacciones individuales
+          if (field === 'gananciaGabrielTotal') return;
+          
+          const displayName = fieldMap[field as keyof typeof fieldMap] || field;
+          let value = (transaction as any)[field];
+          
+          // Formateo especial para ciertos campos en JSON
+          if (field === 'gananciaGabriel' || field === 'usdTotal' || field === 'usdNeto') {
+            value = Number(value).toFixed(2);
+          }
+          
+          item[displayName] = value;
+        });
+      return item;
+    });
+    
+    const result: any = {
+      data: exportData
+    };
+    
+    if (config.includeMetadata) {
+      result.metadata = {
+        generatedAt: new Date().toISOString(),
+        totalRecords: data.length,
+        fields: config.fields,
+        filters: config.filters
+      };
+    }
+    
+    return JSON.stringify(result, null, 2);
+  };
+
+  // Generar PDF real usando jsPDF
+      const generatePDF = (data: Transaction[], config: ExportConfig) => {
+        const fieldMap = getFieldMap();
+        const doc = new jsPDF();
+        
+        // Configuración inicial
+        let yPosition = 25;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 20;
+        const contentWidth = pageWidth - (margin * 2);
+        
+        // Colores corporativos
+        const primaryColor = [34, 197, 94]; // Verde
+        const secondaryColor = [59, 130, 246]; // Azul
+        const darkColor = [31, 41, 55]; // Gris oscuro
+        const lightGray = [243, 244, 246]; // Gris claro
+        const accentColor = [168, 85, 247]; // Púrpura
+        
+        // Header con fondo de color
+         doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+         doc.rect(0, 0, pageWidth, 35, 'F');
+        
+        // Logo/Icono simulado
+        doc.setFillColor(255, 255, 255);
+        doc.circle(25, 17.5, 8, 'F');
+        doc.setFontSize(12);
+        doc.setTextColor(34, 197, 94);
+        doc.setFont('helvetica', 'bold');
+        doc.text('$', 25, 20, { align: 'center' });
+        
+        // Título principal
+        doc.setFontSize(22);
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('helvetica', 'bold');
+        doc.text('CASA DE CAMBIOS', 40, 18);
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Reporte de Transacciones', 40, 26);
+        
+        // Fecha en el header
+        doc.setFontSize(10);
+        doc.text(new Date().toLocaleDateString('es-ES', { 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        }), pageWidth - margin, 20, { align: 'right' });
+        
+        yPosition = 50;
+       
+       // Sección de información con cards
+        if (config.includeMetadata) {
+          // Card de información general
+          doc.setFillColor(lightGray[0], lightGray[1], lightGray[2]);
+          doc.roundedRect(margin, yPosition, contentWidth / 2 - 5, 35, 3, 3, 'F');
+          
+          doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+          doc.setFontSize(12);
+          doc.setFont('helvetica', 'bold');
+          doc.text('INFORMACIÓN GENERAL', margin + 5, yPosition + 8);
+          
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'normal');
+          doc.text(`Registros: ${data.length}`, margin + 5, yPosition + 16);
+          doc.text(`Generado: ${new Date().toLocaleString('es-ES')}`, margin + 5, yPosition + 22);
+          doc.text(`Período: ${config.dateRange.start || 'N/A'} - ${config.dateRange.end || 'N/A'}`, margin + 5, yPosition + 28);
+          
+          // Card de filtros (si existen)
+          if (Object.keys(config.filters).length > 0) {
+            doc.setFillColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
+            doc.roundedRect(margin + contentWidth / 2 + 5, yPosition, contentWidth / 2 - 5, 35, 3, 3, 'F');
+            
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'bold');
+            doc.text('FILTROS APLICADOS', margin + contentWidth / 2 + 10, yPosition + 8);
+            
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'normal');
+            let filterY = yPosition + 16;
+            
+            if (config.filters.collaborator) {
+              doc.text(`Colaborador: ${config.filters.collaborator}`, margin + contentWidth / 2 + 10, filterY);
+              filterY += 5;
+            }
+            if (config.filters.client) {
+              doc.text(`Cliente: ${config.filters.client}`, margin + contentWidth / 2 + 10, filterY);
+              filterY += 5;
+            }
+            if (config.filters.status) {
+              doc.text(`Estado: ${config.filters.status}`, margin + contentWidth / 2 + 10, filterY);
+              filterY += 5;
+            }
+          }
+          
+          yPosition += 45;
+        }
+       
+       // Título de sección de datos
+        doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text('DATOS DE TRANSACCIONES', margin, yPosition);
+        yPosition += 15;
+        
+        // Headers de tabla con estilo moderno (filtrar gananciaGabrielTotal)
+         const tableFields = config.fields.filter(field => field !== 'gananciaGabrielTotal');
+         const headers = tableFields.map(field => fieldMap[field as keyof typeof fieldMap] || field);
+         const colWidth = contentWidth / headers.length;
+        
+        // Fondo del header
+        doc.setFillColor(darkColor[0], darkColor[1], darkColor[2]);
+        doc.rect(margin, yPosition - 5, contentWidth, 12, 'F');
+        
+        // Texto del header
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        
+        headers.forEach((header, index) => {
+          const x = margin + (index * colWidth) + 2;
+          doc.text(header.substring(0, 12), x, yPosition + 2);
+        });
+        yPosition += 12;
+       
+       // Datos de la tabla con filas alternadas
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        
+        data.forEach((transaction, index) => {
+          // Verificar si necesitamos nueva página
+          if (yPosition > 250) {
+            doc.addPage();
+            
+            // Repetir header en nueva página
+            yPosition = 25;
+            
+            // Header con fondo
+            doc.setFillColor(darkColor[0], darkColor[1], darkColor[2]);
+            doc.rect(margin, yPosition - 5, contentWidth, 12, 'F');
+            
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'bold');
+            
+            headers.forEach((header, headerIndex) => {
+               const x = margin + (headerIndex * colWidth) + 2;
+               doc.text(header.substring(0, 12), x, yPosition + 2);
+             });
+            yPosition += 12;
+            
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+          }
+          
+          // Fondo alternado para filas
+          if (index % 2 === 0) {
+            doc.setFillColor(248, 250, 252); // Gris muy claro
+            doc.rect(margin, yPosition - 2, contentWidth, 10, 'F');
+          }
+          
+          // Color de texto según el estado
+          const status = (transaction as any).status;
+          if (status === 'completed') {
+            doc.setTextColor(22, 163, 74); // Verde
+          } else if (status === 'pending') {
+            doc.setTextColor(245, 158, 11); // Amarillo
+          } else if (status === 'failed') {
+            doc.setTextColor(239, 68, 68); // Rojo
+          } else {
+            doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+          }
+          
+          // Dibujar fila de datos (filtrar gananciaGabrielTotal)
+           const tableFields = config.fields.filter(field => field !== 'gananciaGabrielTotal');
+           tableFields.forEach((field, fieldIndex) => {
+             const value = (transaction as any)[field];
+             let displayValue = String(value);
+             
+             // Formateo especial por tipo de campo
+              if (field === 'fecha') {
+                displayValue = new Date(value).toLocaleDateString('es-ES');
+              } else if (field === 'usdTotal' || field === 'usdNeto' || field === 'gananciaGabriel') {
+                displayValue = `$${Number(value).toFixed(2)}`;
+                doc.setTextColor(22, 163, 74); // Verde para montos
+              } else if (field === 'comision') {
+                displayValue = `${value}%`;
+                doc.setTextColor(168, 85, 247); // Púrpura para comisiones
+              } else if (field === 'montoGs') {
+                displayValue = `${Number(value).toLocaleString()} Gs`;
+              } else if (field === 'tasaUsada') {
+                displayValue = `${Number(value).toLocaleString()}`;
+              } else if (field === 'status') {
+                // Mantener el color ya establecido arriba
+              } else {
+                doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+              }
+              
+              const x = margin + (fieldIndex * (contentWidth / tableFields.length)) + 2;
+              doc.text(displayValue.substring(0, 15), x, yPosition + 3);
+           });
+          
+          yPosition += 10;
+        });
+       
+       // Resumen estadístico con diseño moderno
+        yPosition += 20;
+        if (yPosition > 200) {
+          doc.addPage();
+          yPosition = 25;
+        }
+        
+        // Título de resumen
+        doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+        doc.setFontSize(18);
+        doc.setFont('helvetica', 'bold');
+        doc.text('RESUMEN EJECUTIVO', margin, yPosition);
+        yPosition += 20;
+        
+        // Calcular estadísticas
+        const totalUSD = data.reduce((sum, t) => sum + (t.usdTotal || 0), 0);
+        const totalCommissions = data.reduce((sum, t) => sum + ((t.usdTotal * t.comision / 100) || 0), 0);
+        const avgTransaction = data.length > 0 ? totalUSD / data.length : 0;
+        const uniqueCollaborators = [...new Set(data.map(t => t.colaborador))];
+        const uniqueClients = [...new Set(data.map(t => t.cliente))];
+        
+        // Card 1: Volumen total
+        doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+        doc.roundedRect(margin, yPosition, (contentWidth / 2) - 5, 25, 3, 3, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text('VOLUMEN TOTAL', margin + 5, yPosition + 8);
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`$${totalUSD.toFixed(2)}`, margin + 5, yPosition + 18);
+        
+        // Card 2: Comisiones
+        doc.setFillColor(accentColor[0], accentColor[1], accentColor[2]);
+        doc.roundedRect(margin + (contentWidth / 2) + 5, yPosition, (contentWidth / 2) - 5, 25, 3, 3, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text('COMISIONES', margin + (contentWidth / 2) + 10, yPosition + 8);
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`$${totalCommissions.toFixed(2)}`, margin + (contentWidth / 2) + 10, yPosition + 18);
+        
+        yPosition += 35;
+        
+        // Card 3: Promedio
+        doc.setFillColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
+        doc.roundedRect(margin, yPosition, (contentWidth / 2) - 5, 25, 3, 3, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text('PROMEDIO', margin + 5, yPosition + 8);
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`$${avgTransaction.toFixed(2)}`, margin + 5, yPosition + 18);
+        
+        // Card 4: Transacciones
+        doc.setFillColor(darkColor[0], darkColor[1], darkColor[2]);
+        doc.roundedRect(margin + (contentWidth / 2) + 5, yPosition, (contentWidth / 2) - 5, 25, 3, 3, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text('TRANSACCIONES', margin + (contentWidth / 2) + 10, yPosition + 8);
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${data.length}`, margin + (contentWidth / 2) + 10, yPosition + 18);
+        
+        yPosition += 35;
+         
+         // Card 5: Ganancia Gabriel (solo si está seleccionado gananciaGabrielTotal)
+          if (config.fields.includes('gananciaGabrielTotal')) {
+            const totalGananciaGabriel = data.reduce((sum, t) => sum + (t.gananciaGabriel || 0), 0);
+            doc.setFillColor(accentColor[0], accentColor[1], accentColor[2]);
+            doc.roundedRect(margin, yPosition, contentWidth, 25, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.text('GANANCIA GABRIEL TOTAL', margin + 5, yPosition + 8);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text(`$${totalGananciaGabriel.toFixed(2)}`, margin + 5, yPosition + 18);
+            yPosition += 35;
+          }
+         
+         yPosition += 35;
+         
+         // Información adicional
+         doc.setFillColor(lightGray[0], lightGray[1], lightGray[2]);
+         doc.roundedRect(margin, yPosition, contentWidth, 20, 3, 3, 'F');
+        
+        doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('PARTICIPANTES', margin + 5, yPosition + 8);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.text(`Colaboradores: ${uniqueCollaborators.join(', ')}`, margin + 5, yPosition + 14);
+        doc.text(`Clientes únicos: ${uniqueClients.length}`, margin + 5, yPosition + 18);
+       
+       // Footer moderno en todas las páginas
+         const pageCount = (doc as any).internal.pages.length - 1;
+         for (let i = 1; i <= pageCount; i++) {
+           doc.setPage(i);
+           
+           // Línea superior del footer
+           const footerY = pageHeight - 20;
+           doc.setDrawColor(lightGray[0], lightGray[1], lightGray[2]);
+           doc.setLineWidth(0.5);
+           doc.line(margin, footerY, pageWidth - margin, footerY);
+           
+           // Información del footer
+           doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+           doc.setFontSize(8);
+           doc.setFont('helvetica', 'normal');
+           
+           // Lado izquierdo: Empresa
+           doc.text('Casa de Cambios Dashboard', margin, footerY + 8);
+           
+           // Centro: Fecha de generación
+           doc.text(
+             `${new Date().toLocaleDateString('es-ES')}`,
+             pageWidth / 2,
+             footerY + 8,
+             { align: 'center' }
+           );
+           
+           // Lado derecho: Paginación
+           doc.text(
+             `Página ${i} de ${pageCount}`,
+             pageWidth - margin,
+             footerY + 8,
+             { align: 'right' }
+           );
+         }
+       
+       // Retornar el PDF como blob
+       return doc.output('blob');
+     };
+
+  // Descargar archivo
+  const downloadFile = (content: string | Blob, filename: string, mimeType: string) => {
+    let blob: Blob;
+    if (content instanceof Blob) {
+      blob = content;
+    } else {
+      blob = new Blob([content], { type: mimeType });
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold text-gray-900">Gestión de Transacciones</h1>
+        <button 
+          onClick={() => setIsExportModalOpen(true)}
+          className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors duration-200"
+        >
+          <Download className="w-4 h-4" />
+          <span>Exportar</span>
+        </button>
+      </div>
+
+      {/* Filtros Avanzados */}
+      <AdvancedFilters
+        filters={filters}
+        onFiltersChange={setFilters}
+        availableCollaborators={[...new Set(transactions.map(t => t.colaborador))].filter(Boolean)}
+        availableClients={[...new Set(transactions.map(t => t.cliente))].filter(Boolean)}
+        availableStatuses={[
+          { value: 'completed', label: 'Completado', color: 'green' },
+          { value: 'processing', label: 'Procesando', color: 'yellow' },
+          { value: 'error', label: 'Error', color: 'red' }
+        ]}
+        isLoading={isFilterLoading}
+      />
+
+      {/* Loading State */}
+      {loading && (
+        <div className="bg-white/70 backdrop-blur-md rounded-2xl border border-gray-200/50 shadow-lg p-8">
+          <div className="flex items-center justify-center space-x-3">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            <span className="text-gray-600">Cargando transacciones...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Exportación */}
+       <ExportModal
+         isOpen={isExportModalOpen}
+         onClose={() => setIsExportModalOpen(false)}
+         dataType="transactions"
+         availableFields={[
+             { key: 'id', label: 'ID', type: 'string' },
+             { key: 'fecha', label: 'Fecha', type: 'date' },
+             { key: 'cliente', label: 'Cliente', type: 'string' },
+             { key: 'colaborador', label: 'Colaborador', type: 'string' },
+             { key: 'usdTotal', label: 'USD Total', type: 'number' },
+             { key: 'comision', label: 'Comisión %', type: 'number' },
+             { key: 'usdNeto', label: 'USD Neto', type: 'number' },
+             { key: 'montoGs', label: 'Monto Gs', type: 'number' },
+             { key: 'tasaUsada', label: 'Tasa Usada', type: 'number' },
+             { key: 'status', label: 'Estado', type: 'string' },
+             { key: 'chatId', label: 'Chat ID', type: 'string' },
+             { key: 'gananciaGabriel', label: 'Ganancia Gabriel (por transacción)', type: 'number' },
+             { key: 'gananciaGabrielTotal', label: 'Ganancia Gabriel Total (solo en resumen)', type: 'number' }
+           ]}
+         availableFilters={{
+           collaborators: [...new Set(transactions.map(t => t.colaborador))].filter(Boolean),
+           clients: [...new Set(transactions.map(t => t.cliente))].filter(Boolean),
+           statuses: ['completed', 'pending', 'failed']
+         }}
+         onExport={handleExport}
+       />
+
+      {/* Error State */}
+      {error && (
+        <div className="bg-red-50/70 backdrop-blur-md rounded-2xl border border-red-200/50 shadow-lg p-6">
+          <div className="flex items-center space-x-3 text-red-700">
+            <XCircle className="w-5 h-5" />
+            <span>{error}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Transactions Table */}
+      {!loading && !error && (
+        <div className="bg-white/70 backdrop-blur-md rounded-2xl border border-gray-200/50 shadow-lg overflow-hidden">
+          <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50/70">
+              <tr>
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Colaborador</th>
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">USD Total</th>
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Comisión %</th>
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tasa Usada</th>
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Monto Gs</th>
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white/30 divide-y divide-gray-200/50">
+              {filteredTransactions.map((transaction) => (
+                <tr key={transaction.id} className="hover:bg-gray-50/30 transition-colors duration-200">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    {transaction.id}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {new Date(transaction.fecha).toLocaleDateString()}
+                    <br />
+                    <span className="text-xs text-gray-400">
+                      {new Date(transaction.fecha).toLocaleTimeString()}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center mr-3">
+                        <User className="w-4 h-4 text-white" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{transaction.cliente}</div>
+                        <div className="text-xs text-gray-500">{transaction.chatId.split('@')[0]}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{transaction.colaborador}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <DollarSign className="w-4 h-4 text-green-500 mr-1" />
+                      <span className="text-sm font-medium text-gray-900">${transaction.usdTotal.toFixed(2)}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{transaction.comision}%</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <span className="font-medium text-blue-600">{transaction.tasaUsada.toLocaleString()}</span>
+                    <span className="text-xs text-gray-500 ml-1">Gs/$</span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {transaction.montoGs.toLocaleString()} Gs
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-2">
+                      {getStatusIcon(transaction.status)}
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(transaction.status)}`}>
+                        {transaction.status === 'completed' ? 'Completada' :
+                         transaction.status === 'processing' ? 'Procesando' : 'Error'}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      onClick={() => setSelectedTransaction(transaction)}
+                      className="text-blue-600 hover:text-blue-900 transition-colors duration-200"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      )}
+
+      {/* Statistics */}
+      {!loading && !error && (
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-white/70 backdrop-blur-md rounded-2xl p-6 border border-gray-200/50 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Total Transacciones</p>
+              <p className="text-2xl font-bold text-gray-900">{filteredTransactions.length}</p>
+            </div>
+            <CheckCircle className="w-8 h-8 text-blue-500" />
+          </div>
+        </div>
+        <div className="bg-white/70 backdrop-blur-md rounded-2xl p-6 border border-gray-200/50 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Volumen USD</p>
+              <p className="text-2xl font-bold text-gray-900">
+                ${filteredTransactions.reduce((sum, t) => sum + t.usdTotal, 0).toFixed(2)}
+              </p>
+            </div>
+            <DollarSign className="w-8 h-8 text-green-500" />
+          </div>
+        </div>
+        <div className="bg-white/70 backdrop-blur-md rounded-2xl p-6 border border-gray-200/50 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Comisiones</p>
+              <p className="text-2xl font-bold text-gray-900">
+                ${filteredTransactions.reduce((sum, t) => sum + (t.usdTotal * t.comision / 100), 0).toFixed(2)}
+              </p>
+            </div>
+            <DollarSign className="w-8 h-8 text-purple-500" />
+          </div>
+        </div>
+        <div className="bg-white/70 backdrop-blur-md rounded-2xl p-6 border border-gray-200/50 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Promedio Comisión</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {(filteredTransactions.reduce((sum, t) => sum + t.comision, 0) / filteredTransactions.length).toFixed(1)}%
+              </p>
+            </div>
+            <DollarSign className="w-8 h-8 text-orange-500" />
+          </div>
+        </div>
+      </div>
+      )}
+    </div>
+  );
+};
+
+export default TransactionsList;

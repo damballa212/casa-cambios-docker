@@ -1,0 +1,1508 @@
+{
+  "name": "My workflow 43",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-transacciones",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -3328,
+        -144
+      ],
+      "id": "84ff8262-bf1a-4ad7-a02b-bbbf72a5b27f",
+      "name": "WhatsApp Webhook",
+      "webhookId": "976c53a8-7ef9-4204-b7b2-53ca51a5bbb6",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Helper Functions - Funciones reutilizables para el workflow\ntry {\n  const item = $input.first();\n  \n  // Función para limpiar números (remover separadores de miles, convertir comas a puntos)\n  function limpiarNumero(str) {\n    if (!str) return null;\n    return parseFloat(str.replace(/[,]/g, '.').replace(/[^\\d.]/g, ''));\n  }\n\n  // Función para normalizar nombres (remover tildes, espacios extra)\n  function normalizarNombre(nombre) {\n    if (!nombre) return null;\n    return nombre.trim()\n      .replace(/[áàäâ]/gi, 'a')\n      .replace(/[éèëê]/gi, 'e')\n      .replace(/[íìïî]/gi, 'i')\n      .replace(/[óòöô]/gi, 'o')\n      .replace(/[úùüû]/gi, 'u')\n      .replace(/[ñ]/gi, 'n')\n      .replace(/\\s+/g, ' ');\n  }\n\n  // Función para generar idempotency key\n  function generateIdempotencyKey(messageId, chatId, timestamp) {\n    const baseString = `${messageId}-${chatId}-${timestamp}`;\n    let hash = 0;\n    for (let i = 0; i < baseString.length; i++) {\n      const char = baseString.charCodeAt(i);\n      hash = ((hash << 5) - hash) + char;\n      hash = hash & hash; // Convert to 32bit integer\n    }\n    return Math.abs(hash).toString(16);\n  }\n\n  // Función para validar estructura básica de WhatsApp - CORREGIDA PARA ESTRUCTURA REAL\n  function validateWhatsAppStructure(data) {\n    // Los datos vienen con estructura completa del webhook\n    if (!data || !data.body) return false;\n    \n    const body = data.body;\n    \n    // Verificar campos esenciales del webhook\n    if (!body.server_url || !body.apikey) return false;\n    if (!body.data || !body.data.key) return false;\n    if (!body.data.key.remoteJid) return false;\n    if (!body.data.message || !body.data.message.conversation) return false;\n    \n    return true;\n  }\n\n  // Rate limiting simple (usando memoria del nodo)\n  function checkRateLimit(chatId) {\n    const now = Date.now();\n    const RATE_LIMIT_WINDOW = 60000; // 1 minuto\n    const MAX_REQUESTS = 10; // máximo 10 mensajes por minuto\n    \n    // Usar variables globales de n8n para persistencia temporal\n    if (!global.rateLimitCache) {\n      global.rateLimitCache = {};\n    }\n    \n    if (!global.rateLimitCache[chatId]) {\n      global.rateLimitCache[chatId] = [];\n    }\n    \n    // Limpiar requests antiguos\n    global.rateLimitCache[chatId] = global.rateLimitCache[chatId].filter(\n      timestamp => now - timestamp < RATE_LIMIT_WINDOW\n    );\n    \n    // Verificar límite\n    if (global.rateLimitCache[chatId].length >= MAX_REQUESTS) {\n      return false;\n    }\n    \n    // Agregar request actual\n    global.rateLimitCache[chatId].push(now);\n    return true;\n  }\n\n  // Normalizar datos de entrada - CORREGIDA PARA ESTRUCTURA REAL\n  function normalizeWebhookData(rawData) {\n    // Los datos ya vienen con la estructura correcta del webhook\n    if (rawData.body) {\n      // Ya tiene la estructura correcta\n      return rawData;\n    }\n    \n    // Si no tiene .body, crear la estructura esperada\n    return {\n      body: {\n        server_url: rawData.server_url,\n        instance: rawData.instance || rawData.instanceId,\n        apikey: rawData.apikey,\n        data: {\n          key: {\n            id: rawData.messageTimestamp?.toString() || 'unknown',\n            remoteJid: rawData.remoteJid || rawData.sender\n          },\n          message: {\n            conversation: rawData.conversation\n          }\n        },\n        pushName: rawData.pushName\n      }\n    };\n  }\n\n  // Retornar funciones helper disponibles para otros nodos\n  return [{\n    json: {\n      helpers: {\n        limpiarNumero: limpiarNumero,\n        normalizarNombre: normalizarNombre,\n        generateIdempotencyKey: generateIdempotencyKey,\n        validateWhatsAppStructure: validateWhatsAppStructure,\n        checkRateLimit: checkRateLimit,\n        normalizeWebhookData: normalizeWebhookData\n      },\n      // Pasar datos originales\n      originalData: item.json,\n      timestamp: DateTime.now().setZone('America/Asuncion').toISO()\n    }\n  }];\n} catch (error) {\n  return [{\n    json: {\n      error: true,\n      mensaje: `Error en Helper Functions: ${error.message}`,\n      originalData: $input.first().json\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3088,
+        -192
+      ],
+      "id": "7abbabc9-07ab-4f26-9ae9-76eec6a1802a",
+      "name": "Helper Functions"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validación de Seguridad y Estructura - CORREGIDA\ntry {\n  const item = $input.first();\n  const rawData = item.json.originalData;\n  const helpers = item.json.helpers;\n  \n  // 1. Normalizar datos de entrada\n  const normalizedData = helpers.normalizeWebhookData(rawData);\n  \n  // 2. Validar estructura básica de WhatsApp\n  if (!helpers.validateWhatsAppStructure(rawData)) {\n    return [{\n      json: {\n        error: true,\n        mensaje: 'Estructura de datos de WhatsApp inválida',\n        securityCheck: 'FAILED_STRUCTURE'\n      }\n    }];\n  }\n  \n  // 3. Extraer chatId para rate limiting - CORREGIDO\n  const actualData = rawData.body || rawData;\n  const chatId = actualData.remoteJid || actualData.sender || 'unknown';\n  \n  // 4. Verificar rate limiting\n  if (!helpers.checkRateLimit(chatId)) {\n    return [{\n      json: {\n        error: true,\n        mensaje: 'Demasiados mensajes. Espere un momento antes de enviar otro.',\n        securityCheck: 'FAILED_RATE_LIMIT',\n        chatId: chatId\n      }\n    }];\n  }\n  \n  // 5. Validación de esquema JSON básico - CORREGIDA\n  const requiredFields = ['server_url', 'apikey'];\n  for (const field of requiredFields) {\n    if (!actualData[field]) {\n      return [{\n        json: {\n          error: true,\n          mensaje: `Campo requerido faltante: ${field}`,\n          securityCheck: 'FAILED_SCHEMA'\n        }\n      }];\n    }\n  }\n  \n  // 6. Logging de seguridad\n  console.log(`[SECURITY] Validación exitosa para chat: ${chatId}`);\n  \n  // Si todas las validaciones pasan, retornar datos normalizados\n  return [{\n    json: {\n      ...normalizedData,\n      securityCheck: 'PASSED',\n      validatedAt: DateTime.now().setZone('America/Asuncion').toISO(),\n      helpers: helpers // Pasar helpers a nodos siguientes\n    }\n  }];\n  \n} catch (error) {\n  return [{\n    json: {\n      error: true,\n      mensaje: `Error en validación de seguridad: ${error.message}`,\n      securityCheck: 'ERROR'\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2928,
+        -208
+      ],
+      "id": "c193f295-2019-4e63-92f0-244bff25377d",
+      "name": "Validación de Seguridad"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "server-url",
+              "name": "serverUrl",
+              "value": "={{ $json.body.server_url }}",
+              "type": "string"
+            },
+            {
+              "id": "instance-name",
+              "name": "instanceName",
+              "value": "={{ $json.body.instance }}",
+              "type": "string"
+            },
+            {
+              "id": "api-key",
+              "name": "apiKey",
+              "value": "={{ $json.body.apikey }}",
+              "type": "string"
+            },
+            {
+              "id": "message-id",
+              "name": "messageId",
+              "value": "={{ $json.body.data && $json.body.data.key && $json.body.data.key.id ? $json.body.data.key.id : 'unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "chat-id",
+              "name": "chatId",
+              "value": "={{ $json.body.data && $json.body.data.key && $json.body.data.key.remoteJid ? $json.body.data.key.remoteJid : 'unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "content",
+              "name": "content",
+              "value": "={{ $json.body.data && $json.body.data.message && $json.body.data.message.conversation ? $json.body.data.message.conversation : '' }}",
+              "type": "string"
+            },
+            {
+              "id": "user-name",
+              "name": "userName",
+              "value": "={{ $json.body.data && $json.body.data.pushName ? $json.body.data.pushName : 'unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "message-type",
+              "name": "messageType",
+              "value": "={{ $json.body.data && $json.body.data.message && $json.body.data.message.conversation ? 'text' : ($json.body.data && $json.body.data.message && $json.body.data.message.audioMessage ? 'audio' : 'unknown') }}",
+              "type": "string"
+            },
+            {
+              "id": "fecha",
+              "name": "fecha",
+              "value": "={{ DateTime.now().setZone('America/Asuncion').toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "helpers",
+              "name": "helpers",
+              "value": "={{ $json.helpers }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2688,
+        -288
+      ],
+      "id": "38737dc4-fbe1-40d4-b251-18349bd5cf7d",
+      "name": "Entrada WhatsApp"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.error }}",
+                    "rightValue": true,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "equal"
+                    },
+                    "id": "044c808e-cf2f-4874-ab02-a77dd4640eaf"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "error_seguridad"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.content }}",
+                    "rightValue": "#TASA",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "51e588bf-ec69-48c3-9f71-f8ba1d012716"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "tasa"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.content }}",
+                    "rightValue": "#TRANSACCION",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "6ce6bf63-9367-463b-a8c4-0f954c6e7455"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "transaccion"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -2464,
+        -256
+      ],
+      "id": "8c0beb3a-510e-4624-8358-b5f08f292ec1",
+      "name": "Clasificar Mensaje"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Entrada WhatsApp').first().json.serverUrl }}/message/sendText/{{ $('Entrada WhatsApp').first().json.instanceName }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Entrada WhatsApp').first().json.apiKey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $json.chatId || 'unknown' }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ '🚫 ' + $json.mensaje }}"
+            },
+            {
+              "name": "delay",
+              "value": "={{ 2000 }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2080,
+        -496
+      ],
+      "id": "8f12b554-6ac8-4f44-a901-1644efe16a0d",
+      "name": "Enviar Error de Seguridad",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Procesar mensaje #TASA\ntry {\n  const item = $input.first();\n  const texto = item.json.content;\n  const chatId = item.json.chatId;\n  const messageId = item.json.messageId;\n\n  // Extraer valor de tasa usando regex\n  const tasaMatch = texto.match(/#TASA\\s+(\\d+(?:\\.\\d+)?)/i);\n\n  if (!tasaMatch) {\n    return [{\n      json: {\n        error: true,\n        mensaje: 'Formato de tasa inválido. Use: #TASA 7300'\n      }\n    }];\n  }\n\n  const tasa = parseFloat(tasaMatch[1]);\n\n  if (tasa <= 0) {\n    return [{\n      json: {\n        error: true,\n        mensaje: 'La tasa debe ser mayor a 0'\n      }\n    }];\n  }\n\n  // Logging estructurado\n  console.log(`[TASA] Procesada tasa: ${tasa} para chat: ${chatId}`);\n  \n  return [{\n    json: {\n      tipo: 'TASA',\n      tasa: tasa,\n      chat_id: chatId,\n      message_id: messageId,\n      timestamp: DateTime.now().setZone('America/Asuncion').toISO(),\n      audit: {\n        action: 'TASA_PROCESSED',\n        user: chatId,\n        timestamp: DateTime.now().setZone('America/Asuncion').toISO()\n      }\n    }\n  }];\n} catch (error) {\n  return [{\n    json: {\n      error: true,\n      mensaje: `Error procesando tasa: ${error.message}`\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1904,
+        -320
+      ],
+      "id": "5d1533a3-99df-4a94-b0cc-58a25b5287c6",
+      "name": "Procesar TASA",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Insertar nueva tasa global\nINSERT INTO global_rate (rate, updated_at) VALUES ($1, $2);",
+        "options": {
+          "connectionTimeout": 30,
+          "queryBatching": "transaction",
+          "queryReplacement": "={{ $json.tasa }}, {{ $json.timestamp }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1696,
+        -320
+      ],
+      "id": "cdb145df-d290-4eaa-9ecd-9fd3e523ba39",
+      "name": "Guardar Tasa",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "credentials": {
+        "postgres": {
+          "id": "H0Vs7FVbqiEeADTc",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.content }}",
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"colaborador\": {\n      \"type\": \"string\",\n      \"description\": \"Nombre del colaborador si se especifica (ej: Patty, Anael, Gabriel)\"\n    },\n    \"override_porcentaje\": {\n      \"type\": \"number\",\n      \"description\": \"Porcentaje override del colaborador si se especifica entre paréntesis\"\n    },\n    \"cliente\": {\n      \"type\": \"string\",\n      \"description\": \"Nombre completo del cliente\"\n    },\n    \"usd_total\": {\n      \"type\": \"number\",\n      \"description\": \"Monto total en USD (sin el símbolo $)\"\n    },\n    \"comision_pct\": {\n      \"type\": \"number\",\n      \"description\": \"Porcentaje de comisión (sin el símbolo %)\"\n    },\n    \"usd_neto\": {\n      \"type\": \"number\",\n      \"description\": \"Monto neto en USD si se especifica\"\n    },\n    \"monto_gs\": {\n      \"type\": \"number\",\n      \"description\": \"Monto en Guaraníes si se especifica\"\n    }\n  },\n  \"required\": [\"cliente\", \"usd_total\", \"comision_pct\"]\n}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1.2,
+      "position": [
+        -1968,
+        -96
+      ],
+      "id": "dcc700a3-1b60-49c4-a5db-8588099fc6e2",
+      "name": "Extraer Datos Transacción"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Procesar y validar datos extraídos por Information Extractor\ntry {\n  const item = $input.first();\n  const rawData = item.json;\n  const originalData = $('Entrada WhatsApp').first().json;\n  const helpers = originalData.helpers;\n\n  // Debugging: Log de la estructura de datos recibida\n  console.log('[VALIDATOR DEBUG] Datos recibidos del Information Extractor:', JSON.stringify(rawData, null, 2));\n  \n  // El Information Extractor puede retornar los datos directamente o anidados\n  let extractedData = rawData;\n  \n  // Si los datos están anidados, extraerlos\n  if (rawData.output) {\n    extractedData = rawData.output;\n  } else if (rawData.result) {\n    extractedData = rawData.result;\n  } else if (rawData.data) {\n    extractedData = rawData.data;\n  }\n  \n  console.log('[VALIDATOR DEBUG] Datos extraídos procesados:', JSON.stringify(extractedData, null, 2));\n\n  // Usar funciones helper\n  const limpiarNumero = helpers.limpiarNumero;\n  const normalizarNombre = helpers.normalizarNombre;\n\n  // Validar que se extrajeron los datos mínimos\n  if (!extractedData.cliente || !extractedData.usd_total || !extractedData.comision_pct) {\n    console.log('[VALIDATOR DEBUG] Validación fallida - campos faltantes:');\n    console.log('- cliente:', extractedData.cliente);\n    console.log('- usd_total:', extractedData.usd_total);\n    console.log('- comision_pct:', extractedData.comision_pct);\n    \n    return [{\n      json: {\n        error: true,\n        mensaje: 'Formato de transacción inválido. Formatos soportados:\\n' +\n                '• #TRANSACCION Cliente NOMBRE: MONTO$ - X%\\n' +\n                '• #TRANSACCION Cliente NOMBRE APELLIDO: MONTO$ - X%\\n' +\n                '• #TRANSACCION Colaborador NOMBRE Cliente NOMBRE: MONTO$ - X%\\n' +\n                '• Ejemplos válidos:\\n' +\n                '  - #TRANSACCION Cliente Fabiola: 100$ - 10%\\n' +\n                '  - #TRANSACCION Cliente María González: 250$ - 15%\\n' +\n                '  - #TRANSACCION Colaborador Patty Cliente Juan Carlos: 500$ - 13%',\n        debug_info: {\n          received_data: rawData,\n          extracted_data: extractedData,\n          missing_fields: {\n            cliente: !extractedData.cliente,\n            usd_total: !extractedData.usd_total,\n            comision_pct: !extractedData.comision_pct\n          }\n        }\n      }\n    }];\n  }\n\n  // Procesar y validar datos\n  const colaborador = extractedData.colaborador ? normalizarNombre(extractedData.colaborador.trim()) : null;\n  const cliente = normalizarNombre(extractedData.cliente.trim());\n  const usdTotal = typeof extractedData.usd_total === 'number' ? extractedData.usd_total : limpiarNumero(extractedData.usd_total.toString());\n  const comisionPct = typeof extractedData.comision_pct === 'number' ? extractedData.comision_pct : parseFloat(extractedData.comision_pct);\n  \n  // Calcular valores faltantes automáticamente\n  const comisionTotalUsd = usdTotal * (comisionPct / 100);\n  const usdNetoCalculado = usdTotal - comisionTotalUsd;\n  \n  // Si se proporcionó USD neto, validar que coincida\n  const usdNeto = extractedData.usd_neto ? (typeof extractedData.usd_neto === 'number' ? extractedData.usd_neto : limpiarNumero(extractedData.usd_neto.toString())) : usdNetoCalculado;\n  const montoGs = extractedData.monto_gs ? (typeof extractedData.monto_gs === 'number' ? extractedData.monto_gs : limpiarNumero(extractedData.monto_gs.toString())) : null;\n\n  // Validaciones básicas\n  if (!cliente || cliente.length < 2) {\n    return [{\n      json: {\n        error: true,\n        mensaje: 'Cliente no especificado, inválido o muy corto. Debe tener al menos 2 caracteres.'\n      }\n    }];\n  }\n  \n  if (!/^[A-Za-záéíóúñÑ\\s]{2,}$/.test(cliente)) {\n    return [{\n      json: {\n        error: true,\n        mensaje: 'Nombre del cliente contiene caracteres inválidos. Solo se permiten letras, espacios y acentos.'\n      }\n    }];\n  }\n\n  if (!usdTotal || usdTotal <= 0) {\n    return [{\n      json: {\n        error: true,\n        mensaje: 'Monto USD total inválido: debe ser mayor a 0'\n      }\n    }];\n  }\n\n  if (!comisionPct || comisionPct <= 0 || comisionPct >= 100) {\n    return [{\n      json: {\n        error: true,\n        mensaje: 'Porcentaje de comisión inválido: debe estar entre 0.1% y 99.9%'\n      }\n    }];\n  }\n\n  // Validar coherencia si se proporcionó USD neto\n  if (extractedData.usd_neto && Math.abs(usdNeto - usdNetoCalculado) > 0.01) {\n    return [{\n      json: {\n        error: true,\n        mensaje: `USD neto inconsistente. Calculado: ${usdNetoCalculado.toFixed(2)}, Proporcionado: ${usdNeto.toFixed(2)}`\n      }\n    }];\n  }\n\n  // Logging estructurado\n  console.log(`[EXTRACTOR] Éxito - Cliente: ${cliente}${colaborador ? ', colaborador: ' + colaborador : ''}`);\n\n  // Retornar datos procesados\n  return [{\n    json: {\n      // Datos originales\n      chat_id: originalData.chatId,\n      message_id: originalData.messageId,\n      timestamp: DateTime.now().toISO(),\n      audit: {\n        action: 'TRANSACTION_PARSED',\n        user: originalData.chatId,\n        timestamp: DateTime.now().toISO(),\n        method: 'information_extractor'\n      },\n      \n      // Datos extraídos y calculados\n      colaborador: colaborador,\n      override_porcentaje: extractedData.override_porcentaje || null,\n      cliente: cliente,\n      usd_total: usdTotal,\n      comision_pct: comisionPct,\n      usd_neto: usdNeto,\n      monto_gs: montoGs,\n      \n      // Metadata para debugging\n      valores_calculados: {\n        comision_total_usd: comisionTotalUsd,\n        usd_neto_calculado: usdNetoCalculado,\n        extraction_method: 'langchain_information_extractor'\n      }\n    }\n  }];\n} catch (error) {\n  return [{\n    json: {\n      error: true,\n      mensaje: 'Error procesando datos extraídos: ' + error.message,\n      stack: error.stack\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1632,
+        -96
+      ],
+      "id": "581a13b7-1ee3-4539-b3bb-5c34ce48d606",
+      "name": "Validar Datos Extraídos"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Obtener tasa global vigente\nSELECT rate FROM global_rate ORDER BY updated_at DESC LIMIT 1;",
+        "options": {
+          "connectionTimeout": 30,
+          "queryBatching": "transaction"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1232,
+        -96
+      ],
+      "id": "b414fac5-562a-409a-8213-dc98e07195ca",
+      "name": "Obtener Tasa Global",
+      "alwaysOutputData": false,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "credentials": {
+        "postgres": {
+          "id": "H0Vs7FVbqiEeADTc",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Procesar transacción con reglas de negocio (CON CACHING DE TASA Y COLABORADOR POR DEFECTO)\ntry {\n  // Validación explícita de datos de entrada\n  const parsedResult = $('Validar Datos Extraídos').first().json;\n  const tasaResult = $('Obtener Tasa Global').first().json;\n  const originalData = $('Entrada WhatsApp').first().json;\n\n  // Validar que tenemos los datos necesarios\n  if (!parsedResult) {\n    throw new Error('Validación: No se recibieron datos del parser');\n  }\n  if (!originalData) {\n    throw new Error('Validación: No se recibieron datos de WhatsApp');\n  }\n\n  // Implementar caching de tasa global con TTL de 5 minutos\n  const CACHE_TTL = 5 * 60 * 1000; // 5 minutos en ms\n  const now = DateTime.now().toMillis();\n\n  // Verificar cache de tasa\n  let tasaGlobal = 7300; // default\n  if (tasaResult && tasaResult.rate) {\n    // Cache hit - usar tasa de BD\n    tasaGlobal = tasaResult.rate;\n  } else {\n    // Cache miss o error - usar tasa por defecto y log\n    console.log('Usando tasa por defecto debido a error en consulta de BD');\n  }\n\n  // Validar datos básicos\n  if (!parsedResult.usd_total || parsedResult.usd_total <= 0) {\n    return [{\n      json: {\n        error: true,\n        mensaje: 'Monto USD total inválido'\n      }\n    }];\n  }\n\n  if (!parsedResult.comision_pct || parsedResult.comision_pct <= 0 || parsedResult.comision_pct >= 100) {\n    return [{\n      json: {\n        error: true,\n        mensaje: 'Porcentaje de comisión inválido'\n      }\n    }];\n  }\n\n  // Calcular comisión total\n  const comisionTotalUsd = parsedResult.usd_total * (parsedResult.comision_pct / 100);\n  const usdNetoCalculado = parsedResult.usd_total - comisionTotalUsd;\n\n  // Determinar colaborador y su porcentaje - CORREGIDO PARA ASIGNAR GABRIEL POR DEFECTO\n  let colaborador = 'Gabriel Zambrano'; // SIEMPRE hay colaborador (Gabriel por defecto)\n  let porcentajeColaborador = 0; // Gabriel recibe el resto por defecto\n  let esColaboradorNuevo = false;\n\n  // Solo cambiar si se especificó un colaborador diferente\n  if (parsedResult.colaborador) {\n    const nombreColaborador = parsedResult.colaborador.toLowerCase().trim();\n    \n    if (nombreColaborador.includes('patty') || nombreColaborador.includes('paty')) {\n      colaborador = 'Patty';\n      porcentajeColaborador = 5; // Siempre 5% del total\n    } else if (nombreColaborador.includes('anael') || nombreColaborador.includes('anel')) {\n      colaborador = 'Anael';\n      \n      if (parsedResult.override_porcentaje) {\n        porcentajeColaborador = parsedResult.override_porcentaje;\n      } else {\n        // Reglas de mapeo para Anael\n        if (parsedResult.comision_pct === 10) {\n          porcentajeColaborador = 2;\n        } else if (parsedResult.comision_pct === 13 || parsedResult.comision_pct === 15) {\n          porcentajeColaborador = 5;\n        } else {\n          porcentajeColaborador = 5; // Default\n        }\n      }\n    } else if (nombreColaborador.includes('gabriel') || nombreColaborador.includes('gabo')) {\n      colaborador = 'Gabriel Zambrano';\n      porcentajeColaborador = 0; // Gabriel recibe el resto\n    } else {\n      // Colaborador nuevo\n      colaborador = parsedResult.colaborador;\n      esColaboradorNuevo = true;\n      \n      if (!parsedResult.override_porcentaje) {\n        return [{\n          json: {\n            error: true,\n            mensaje: `Colaborador nuevo sin porcentaje base. Reenvía como: 'Colaborador ${parsedResult.colaborador} (X%)'`\n          }\n        }];\n      }\n      \n      porcentajeColaborador = parsedResult.override_porcentaje;\n    }\n  }\n  // NOTA: Si no se especifica colaborador, colaborador = 'Gabriel Zambrano' y porcentajeColaborador = 0\n\n  // Calcular comisiones\n  const comisionColaboradorUsd = parsedResult.usd_total * (porcentajeColaborador / 100);\n  const comisionGabrielUsd = comisionTotalUsd - comisionColaboradorUsd;\n\n  // Convertir a Gs\n  const montoGs = Math.round(usdNetoCalculado * tasaGlobal);\n  const comisionColaboradorGs = Math.round(comisionColaboradorUsd * tasaGlobal);\n  const comisionGabrielGs = Math.round(comisionGabrielUsd * tasaGlobal);\n\n  // Validaciones\n  const observaciones = [];\n\n  if (parsedResult.usd_neto && Math.abs(parsedResult.usd_neto - usdNetoCalculado) > 0.01) {\n    observaciones.push(`USD neto del mensaje (${parsedResult.usd_neto}) difiere del calculado (${usdNetoCalculado.toFixed(4)})`);\n  }\n\n  if (parsedResult.monto_gs && Math.abs(parsedResult.monto_gs - montoGs) > 1) {\n    observaciones.push(`Monto Gs del mensaje (${parsedResult.monto_gs}) difiere del calculado (${montoGs})`);\n  }\n\n  // Logging estructurado\n  console.log(`[COMISIONES] Calculadas para ${parsedResult.cliente}: USD ${parsedResult.usd_total}, Tasa: ${tasaGlobal}, Colaborador: ${colaborador}`);\n\n  return [{\n    json: {\n      tipo: 'TRANSACCION',\n      // Datos originales\n      chat_id: originalData.chatId,\n      message_id: originalData.messageId,\n      timestamp: DateTime.now().setZone('America/Asuncion').toISO(),\n      audit: {\n        action: 'COMMISSIONS_CALCULATED',\n        user: originalData.chatId,\n        timestamp: DateTime.now().setZone('America/Asuncion').toISO()\n      },\n      \n      // Datos extraídos\n      colaborador: colaborador, // SIEMPRE tendrá un valor (Gabriel por defecto)\n      cliente: parsedResult.cliente,\n      usd_total: parsedResult.usd_total,\n      comision_pct: parsedResult.comision_pct,\n      \n      // Datos calculados\n      usd_neto: usdNetoCalculado,\n      monto_gs: montoGs,\n      tasa_usada: tasaGlobal,\n      \n      // Comisiones\n      comision_total_usd: comisionTotalUsd,\n      comision_colaborador_usd: comisionColaboradorUsd,\n      comision_gabriel_usd: comisionGabrielUsd,\n      comision_colaborador_gs: comisionColaboradorGs,\n      comision_gabriel_gs: comisionGabrielGs,\n      porcentaje_colaborador: porcentajeColaborador,\n      \n      // Flags\n      es_colaborador_nuevo: esColaboradorNuevo,\n      observaciones: observaciones.join('; ') || null\n    }\n  }];\n} catch (error) {\n  return [{\n    json: {\n      error: true,\n      mensaje: `Error calculando comisiones: ${error.message}`\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1008,
+        -96
+      ],
+      "id": "6f1e80ea-0271-4a3b-8d73-1b2988df10a2",
+      "name": "Calcular Comisiones"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparar queries para insertar/actualizar datos (CON IDEMPOTENCY_KEY REQUERIDO)\nconst data = $input.first().json;\nconst helpers = $('Entrada WhatsApp').first().json.helpers;\n\nif (data.error) {\n  return [{ json: data }];\n}\n\n// Usar función helper para generar idempotency key\nconst idempotencyKey = helpers.generateIdempotencyKey(data.message_id, data.chat_id, data.timestamp);\n\nreturn [{\n  json: {\n    ...data,\n    idempotency_key: idempotencyKey,\n    // Queries preparadas con separadores correctos\n    query_upsert_client: `\n      INSERT INTO clients (name, tx_count, created_at, updated_at) \n      VALUES ($1, 0, CURRENT_TIMESTAMP AT TIME ZONE 'America/Asuncion', CURRENT_TIMESTAMP AT TIME ZONE 'America/Asuncion') \n      ON CONFLICT (LOWER(name)) DO UPDATE SET updated_at = CURRENT_TIMESTAMP AT TIME ZONE 'America/Asuncion' \n      RETURNING id, tx_count;\n    `,\n    query_upsert_collaborator: data.colaborador ? `\n      INSERT INTO collaborators (name, base_pct_usd_total, tx_count, created_at, updated_at) \n      VALUES ($1, $2, 0, CURRENT_TIMESTAMP AT TIME ZONE 'America/Asuncion', CURRENT_TIMESTAMP AT TIME ZONE 'America/Asuncion') \n      ON CONFLICT (LOWER(name)) DO UPDATE SET \n        base_pct_usd_total = CASE WHEN EXCLUDED.base_pct_usd_total IS NOT NULL THEN EXCLUDED.base_pct_usd_total ELSE collaborators.base_pct_usd_total END,\n        updated_at = CURRENT_TIMESTAMP AT TIME ZONE 'America/Asuncion' \n      RETURNING id, tx_count;\n    ` : null,\n    query_insert_transaction: `\n      INSERT INTO transactions (\n        idempotency_key, fecha, chat_id, colaborador, cliente, \n        usd_total, comision, usd_neto, monto_gs, \n        monto_colaborador_gs, monto_colaborador_usd, \n        monto_comision_gabriel_gs, monto_comision_gabriel_usd,\n        tasa_usada, observaciones\n      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)\n      RETURNING id;\n    `,\n    query_update_client_counter: `UPDATE clients SET tx_count = tx_count + 1 WHERE LOWER(name) = LOWER($1);`,\n    query_update_collaborator_counter: data.colaborador ? `UPDATE collaborators SET tx_count = tx_count + 1 WHERE LOWER(name) = LOWER($1);` : null\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -832,
+        -96
+      ],
+      "id": "ecf78095-015c-4fbf-b13f-5d48aa59260d",
+      "name": "Preparar Queries"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO clients (name, tx_count, created_at, updated_at) VALUES ($1, 0, CURRENT_TIMESTAMP AT TIME ZONE 'America/Asuncion', CURRENT_TIMESTAMP AT TIME ZONE 'America/Asuncion') ON CONFLICT (LOWER(name)) DO UPDATE SET updated_at = CURRENT_TIMESTAMP AT TIME ZONE 'America/Asuncion';",
+        "options": {
+          "connectionTimeout": 30,
+          "queryBatching": "transaction",
+          "queryReplacement": "={{ $node['Preparar Queries'].json.cliente }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1504,
+        128
+      ],
+      "id": "f23c8563-f54b-4dab-ada4-9a8c7e03ad36",
+      "name": "Upsert Cliente",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "credentials": {
+        "postgres": {
+          "id": "H0Vs7FVbqiEeADTc",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO collaborators (name, base_pct_usd_total, tx_count, created_at, updated_at) VALUES ($1, $2, 0, CURRENT_TIMESTAMP AT TIME ZONE 'America/Asuncion', CURRENT_TIMESTAMP AT TIME ZONE 'America/Asuncion') ON CONFLICT (LOWER(name)) DO UPDATE SET base_pct_usd_total = CASE WHEN EXCLUDED.base_pct_usd_total IS NOT NULL THEN EXCLUDED.base_pct_usd_total ELSE collaborators.base_pct_usd_total END, updated_at = CURRENT_TIMESTAMP AT TIME ZONE 'America/Asuncion';",
+        "options": {
+          "connectionTimeout": 30,
+          "queryBatching": "transaction",
+          "queryReplacement": "={{ $node['Preparar Queries'].json.colaborador }}, {{ $node['Preparar Queries'].json.porcentaje_colaborador }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1344,
+        128
+      ],
+      "id": "2a179598-f4a8-4538-9f53-2280762887f4",
+      "name": "Upsert Colaborador",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "credentials": {
+        "postgres": {
+          "id": "H0Vs7FVbqiEeADTc",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO transactions (idempotency_key, fecha, chat_id, colaborador, cliente, usd_total, comision, usd_neto, monto_gs, monto_colaborador_gs, monto_colaborador_usd, monto_comision_gabriel_gs, monto_comision_gabriel_usd, tasa_usada, observaciones) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id, idempotency_key, 'SUCCESS' as status, CURRENT_TIMESTAMP AT TIME ZONE 'America/Asuncion' as saved_at;",
+        "options": {
+          "connectionTimeout": 30,
+          "queryBatching": "transaction",
+          "queryReplacement": "={{ [$node['Preparar Queries'].json.idempotency_key, $node['Preparar Queries'].json.timestamp, $node['Preparar Queries'].json.chat_id, $node['Preparar Queries'].json.colaborador, $node['Preparar Queries'].json.cliente, $node['Preparar Queries'].json.usd_total, $node['Preparar Queries'].json.comision_pct, $node['Preparar Queries'].json.usd_neto, $node['Preparar Queries'].json.monto_gs, $node['Preparar Queries'].json.comision_colaborador_gs, $node['Preparar Queries'].json.comision_colaborador_usd, $node['Preparar Queries'].json.comision_gabriel_gs, $node['Preparar Queries'].json.comision_gabriel_usd, $node['Preparar Queries'].json.tasa_usada, $node['Preparar Queries'].json.observaciones].join(', ') }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1856,
+        128
+      ],
+      "id": "01cf8579-e58f-468d-bdb6-7f88e61fb392",
+      "name": "Insertar Transacción",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "credentials": {
+        "postgres": {
+          "id": "H0Vs7FVbqiEeADTc",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE collaborators SET tx_count = tx_count + 1 WHERE LOWER(name) = LOWER($1);",
+        "options": {
+          "connectionTimeout": 30,
+          "queryBatching": "transaction",
+          "queryReplacement": "={{ $node['Preparar Queries'].json.colaborador }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1168,
+        128
+      ],
+      "id": "ac3effc8-84d6-441c-ace7-05f04488292c",
+      "name": "Actualizar Contador Colaborador",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "credentials": {
+        "postgres": {
+          "id": "H0Vs7FVbqiEeADTc",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE clients SET tx_count = tx_count + 1 WHERE LOWER(name) = LOWER($1);",
+        "options": {
+          "connectionTimeout": 30,
+          "queryBatching": "transaction",
+          "queryReplacement": "={{ $node['Preparar Queries'].json.cliente }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1008,
+        128
+      ],
+      "id": "e2218196-2354-4701-8fb7-e6eaa4ac32c4",
+      "name": "Actualizar Contador Cliente",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "credentials": {
+        "postgres": {
+          "id": "H0Vs7FVbqiEeADTc",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generar respuesta de confirmación CON VALIDACIÓN DE GUARDADO\nconst data = $('Preparar Queries').first().json;\nconst dbResult = $('Insertar Transacción').first().json;\nconst sheetsResult = $('Agregar a Google Sheets').first().json;\n\n// Validar que la transacción se guardó exitosamente\nif (!dbResult || !dbResult.status || dbResult.status !== 'SUCCESS') {\n  return [{\n    json: {\n      status: 'error',\n      message: '❌ ERROR: La transacción no se pudo guardar en la base de datos. Por favor, intente nuevamente.'\n    }\n  }];\n}\n\nif (data.error) {\n  return [{\n    json: {\n      status: 'error',\n      message: data.mensaje\n    }\n  }];\n}\n\n// Construir mensaje de confirmación\nlet mensaje = \"💸 TRANSACCIÓN CONFIRMADA 💸\\n\\n\";\nmensaje += `👤 Cliente: ${data.cliente}\\n`;\nmensaje += `🤝 Colaborador: ${data.colaborador || '—'}\\n\\n`;\n\nmensaje += `💵 USD Total: $${Number(data.usd_total).toFixed(2)}\\n`;\nmensaje += `📉 Comisión: ${Number(data.comision_pct).toFixed(2)}%\\n`;\nmensaje += `✅ USD Neto (a pagar): $${Number(data.usd_neto).toFixed(2)}\\n\\n`;\n\nmensaje += `💱 Tasa usada: ${Number(data.tasa_usada).toFixed(2)} Gs/USD\\n`;\nmensaje += `💰 Monto entregado: ${Number(data.monto_gs).toLocaleString()} Gs\\n\\n`;\n\nmensaje += \"📊 Distribución de comisiones:\\n\";\nif (data.colaborador && data.colaborador !== 'Gabriel Zambrano') {\n  mensaje += `• ${data.colaborador}: $${Number(data.comision_colaborador_usd).toFixed(2)} USD (${Number(data.comision_colaborador_gs).toLocaleString()} Gs)\\n`;\n}\nmensaje += `• Gabriel Zambrano: $${Number(data.comision_gabriel_usd).toFixed(2)} USD (${Number(data.comision_gabriel_gs).toLocaleString()} Gs)\\n`;\n\nif (data.observaciones) {\n  mensaje += `\\n📝 Observaciones: ${data.observaciones}`;\n}\n\n// Agregar confirmación de Google Sheets si fue exitoso\nif (sheetsResult && !sheetsResult.error) {\n  mensaje += \"\\n\\n📋 Registro agregado a Google Sheets exitosamente\";\n} else if (sheetsResult && sheetsResult.error) {\n  mensaje += \"\\n\\n⚠️ Advertencia: Error al agregar a Google Sheets, pero la transacción se guardó correctamente\";\n}\n\nreturn [{\n  json: {\n    status: 'success',\n    message: mensaje,\n    transaction_id: dbResult.id,\n    idempotency_key: dbResult.idempotency_key,\n    saved_at: dbResult.saved_at,\n    sheets_status: sheetsResult ? (sheetsResult.error ? 'error' : 'success') : 'unknown'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -848,
+        128
+      ],
+      "id": "f41be79a-a7c4-41bd-99a2-97e516f4fa56",
+      "name": "Generar Respuesta"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Entrada WhatsApp').first().json.serverUrl }}/message/sendText/{{ $('Entrada WhatsApp').first().json.instanceName }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Entrada WhatsApp').first().json.apiKey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('Entrada WhatsApp').first().json.chatId }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.message }}"
+            },
+            {
+              "name": "delay",
+              "value": "={{ 2000 }}"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 5
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -688,
+        128
+      ],
+      "id": "50b03e97-f49a-4ed9-aef6-07f9b65edb8d",
+      "name": "Enviar WhatsApp",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Entrada WhatsApp').first().json.serverUrl }}/message/sendText/{{ $('Entrada WhatsApp').first().json.instanceName }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Entrada WhatsApp').first().json.apiKey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('Entrada WhatsApp').first().json.chatId }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ \"✅ Tasa actualizada:\\n💲 1 Dólar = \" + Number($json.rate).toFixed(2) + \" Guaraníes 🇵🇾\" }}"
+            },
+            {
+              "name": "delay",
+              "value": "={{ 2000 }}"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 5
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1360,
+        -320
+      ],
+      "id": "a699133e-1204-4646-8e6a-6d0cb2d4e8ce",
+      "name": "Enviar WhatsApp1",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Obtener tasa global vigente\nSELECT rate FROM global_rate ORDER BY updated_at DESC LIMIT 1;",
+        "options": {
+          "connectionTimeout": 30,
+          "queryBatching": "transaction"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1520,
+        -320
+      ],
+      "id": "fe36d65a-8f42-451b-96be-e7dda66e311e",
+      "name": "Obtener Tasa Global1",
+      "alwaysOutputData": false,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "credentials": {
+        "postgres": {
+          "id": "H0Vs7FVbqiEeADTc",
+          "name": "Postgres account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ba4aa407-34bc-4462-8a67-503b470b126d",
+              "leftValue": "={{ $json.audit.action }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        -1440,
+        -96
+      ],
+      "id": "590925e3-4174-47b8-9a99-6dacf644ff3b",
+      "name": "Filtrar Transacciones Válidas"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Entrada WhatsApp').first().json.serverUrl }}/message/sendText/{{ $('Entrada WhatsApp').first().json.instanceName }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Entrada WhatsApp').first().json.apiKey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('Entrada WhatsApp').first().json.chatId }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ 'Fomarto Incorrecto ❌ ' + $json.mensaje }}"
+            },
+            {
+              "name": "delay",
+              "value": "={{ 2000 }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2224,
+        -16
+      ],
+      "id": "4c258d93-1cdb-48ee-a48c-27cffbae3113",
+      "name": "Enviar Error Parser",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -2032,
+        112
+      ],
+      "id": "1275b6ba-a9e3-4f57-9091-745eb1ce4018",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "U8sWDbCF3qi2zK7z",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1bZ5_RACpqsC569VYdRQ9ZikRmX1RAeQRej4p1sA8kQc",
+          "mode": "list",
+          "cachedResultName": "TABLAS BASE DE DATOS GABRIEL",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bZ5_RACpqsC569VYdRQ9ZikRmX1RAeQRej4p1sA8kQc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Operaciones"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Fecha": "={{ $node['Preparar Queries'].json.timestamp.split('T')[0] }}",
+            "Colaborador": "={{ $node['Preparar Queries'].json.colaborador }}",
+            "Cliente": "={{ $node['Preparar Queries'].json.cliente }}",
+            "USD Total": "={{ $node['Preparar Queries'].json.usd_total }}",
+            "Comisión %": "={{ $node['Preparar Queries'].json.comision_pct + '%' }}",
+            "USD Neto": "={{ '$' + $node['Preparar Queries'].json.usd_neto.toFixed(2) }}",
+            "Monto Gs": "={{ $node['Preparar Queries'].json.monto_gs + ' Gs' }}",
+            "Comisión Colaborador USD": "={{ $node['Preparar Queries'].json.comision_colaborador_usd.toFixed(2) }}",
+            "Comisión Gabriel USD": "={{ $node['Preparar Queries'].json.comision_gabriel_usd.toFixed(2) }}",
+            "Tasa Usada": "={{ $node['Preparar Queries'].json.tasa_usada.toLocaleString() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Fecha",
+              "displayName": "Fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Colaborador",
+              "displayName": "Colaborador",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Cliente",
+              "displayName": "Cliente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "USD Total",
+              "displayName": "USD Total",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Comisión %",
+              "displayName": "Comisión %",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "USD Neto",
+              "displayName": "USD Neto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Monto Gs",
+              "displayName": "Monto Gs",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Comisión Colaborador USD",
+              "displayName": "Comisión Colaborador USD",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Comisión Gabriel USD",
+              "displayName": "Comisión Gabriel USD",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Tasa Usada",
+              "displayName": "Tasa Usada",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED",
+          "useAppend": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1680,
+        128
+      ],
+      "id": "048e5736-5902-48ed-b498-44612766cb92",
+      "name": "Agregar a Google Sheets",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "5KLiFB2OzDZxklsN",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3001/api/logs/webhook",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonParameters": {
+          "parameters": [
+            {
+              "name": "timestamp",
+              "value": "={{ DateTime.now().setZone('America/Asuncion').toISO() }}"
+            },
+            {
+              "name": "level",
+              "value": "success"
+            },
+            {
+              "name": "component",
+              "value": "n8n-webhook"
+            },
+            {
+              "name": "message",
+              "value": "={{ 'Transacción procesada exitosamente: ' + $('Preparar Queries').first().json.cliente + ' - $' + $('Preparar Queries').first().json.usd_total + ' USD' }}"
+            },
+            {
+              "name": "details",
+              "value": "={{ { workflowId: 'Y4MAUCOCnLk4qYn9', executionId: $execution.id, chatId: $('Entrada WhatsApp').first().json.chatId, transactionData: $('Preparar Queries').first().json } }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -528,
+        128
+      ],
+      "id": "log-success-transaction",
+      "name": "Log Success - Transacción",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3001/api/logs/webhook",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonParameters": {
+          "parameters": [
+            {
+              "name": "timestamp",
+              "value": "={{ DateTime.now().setZone('America/Asuncion').toISO() }}"
+            },
+            {
+              "name": "level",
+              "value": "success"
+            },
+            {
+              "name": "component",
+              "value": "n8n-webhook"
+            },
+            {
+              "name": "message",
+              "value": "={{ 'Tasa actualizada exitosamente: ' + $('Procesar TASA').first().json.tasa + ' Gs/USD' }}"
+            },
+            {
+              "name": "details",
+              "value": "={{ { workflowId: 'Y4MAUCOCnLk4qYn9', executionId: $execution.id, chatId: $('Entrada WhatsApp').first().json.chatId, rateData: $('Procesar TASA').first().json } }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1200,
+        -320
+      ],
+      "id": "log-success-rate",
+      "name": "Log Success - Tasa",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3001/api/logs/webhook",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonParameters": {
+          "parameters": [
+            {
+              "name": "timestamp",
+              "value": "={{ DateTime.now().setZone('America/Asuncion').toISO() }}"
+            },
+            {
+              "name": "level",
+              "value": "error"
+            },
+            {
+              "name": "component",
+              "value": "n8n-webhook"
+            },
+            {
+              "name": "message",
+              "value": "={{ 'Error de seguridad: ' + $json.mensaje }}"
+            },
+            {
+              "name": "details",
+              "value": "={{ { workflowId: 'Y4MAUCOCnLk4qYn9', executionId: $execution.id, chatId: $('Entrada WhatsApp').first().json.chatId, errorData: $json } }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1920,
+        -496
+      ],
+      "id": "log-error-security",
+      "name": "Log Error - Seguridad",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3001/api/logs/webhook",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonParameters": {
+          "parameters": [
+            {
+              "name": "timestamp",
+              "value": "={{ DateTime.now().setZone('America/Asuncion').toISO() }}"
+            },
+            {
+              "name": "level",
+              "value": "error"
+            },
+            {
+              "name": "component",
+              "value": "n8n-webhook"
+            },
+            {
+              "name": "message",
+              "value": "={{ 'Error de formato: ' + $json.mensaje }}"
+            },
+            {
+              "name": "details",
+              "value": "={{ { workflowId: 'Y4MAUCOCnLk4qYn9', executionId: $execution.id, chatId: $('Entrada WhatsApp').first().json.chatId, errorData: $json } }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2064,
+        -16
+      ],
+      "id": "log-error-parser",
+      "name": "Log Error - Parser",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "WhatsApp Webhook": {
+      "main": [
+        [
+          {
+            "node": "Helper Functions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Helper Functions": {
+      "main": [
+        [
+          {
+            "node": "Validación de Seguridad",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validación de Seguridad": {
+      "main": [
+        [
+          {
+            "node": "Entrada WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entrada WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Clasificar Mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clasificar Mensaje": {
+      "main": [
+        [
+          {
+            "node": "Enviar Error de Seguridad",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Procesar TASA",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extraer Datos Transacción",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar Error Parser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procesar TASA": {
+      "main": [
+        [
+          {
+            "node": "Guardar Tasa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar Tasa": {
+      "main": [
+        [
+          {
+            "node": "Obtener Tasa Global1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Datos Transacción": {
+      "main": [
+        [
+          {
+            "node": "Validar Datos Extraídos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Datos Extraídos": {
+      "main": [
+        [
+          {
+            "node": "Filtrar Transacciones Válidas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener Tasa Global": {
+      "main": [
+        [
+          {
+            "node": "Calcular Comisiones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular Comisiones": {
+      "main": [
+        [
+          {
+            "node": "Preparar Queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Queries": {
+      "main": [
+        [
+          {
+            "node": "Insertar Transacción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Cliente": {
+      "main": [
+        [
+          {
+            "node": "Upsert Colaborador",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Colaborador": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Contador Colaborador",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insertar Transacción": {
+      "main": [
+        [
+          {
+            "node": "Agregar a Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar Contador Colaborador": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Contador Cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar Contador Cliente": {
+      "main": [
+        [
+          {
+            "node": "Generar Respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar Respuesta": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener Tasa Global1": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar Transacciones Válidas": {
+      "main": [
+        [
+          {
+            "node": "Obtener Tasa Global",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Extraer Datos Transacción",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agregar a Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Upsert Cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Log Success - Transacción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp1": {
+      "main": [
+        [
+          {
+            "node": "Log Success - Tasa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Error de Seguridad": {
+      "main": [
+        [
+          {
+            "node": "Log Error - Seguridad",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Error Parser": {
+      "main": [
+        [
+          {
+            "node": "Log Error - Parser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "63dad9ce-6069-4e10-83ad-70df2f044f42",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "3eea7d4e5986b862eb0442b160fb385fb6ee48b7e036b16aa7289ae656cb02ab"
+  },
+  "id": "Y4MAUCOCnLk4qYn9",
+  "tags": [
+    {
+      "createdAt": "2025-08-21T03:25:06.836Z",
+      "updatedAt": "2025-08-21T03:25:06.836Z",
+      "id": "2ah6iGmxs7GoqS9G",
+      "name": "WhatsApp"
+    },
+    {
+      "createdAt": "2025-08-23T00:49:41.635Z",
+      "updatedAt": "2025-08-23T00:49:41.635Z",
+      "id": "5Jn0vWUIdUlIHaYC",
+      "name": "Sin AI"
+    },
+    {
+      "createdAt": "2025-08-23T00:49:41.710Z",
+      "updatedAt": "2025-08-23T00:49:41.710Z",
+      "id": "BvMGSZQwDNi1GQiw",
+      "name": "Regex Parser"
+    },
+    {
+      "createdAt": "2025-07-27T20:59:00.667Z",
+      "updatedAt": "2025-07-27T20:59:00.667Z",
+      "id": "tSwR1irZKFYYUzDT",
+      "name": "Casa de Cambios"
+    }
+  ]
+}

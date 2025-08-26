@@ -1,0 +1,46 @@
+# Dockerfile para Frontend React + Vite
+FROM node:18-alpine AS builder
+
+# Instalar dependencias del sistema
+RUN apk add --no-cache git
+
+# Establecer directorio de trabajo
+WORKDIR /app
+
+# Copiar archivos de configuración
+COPY package*.json ./
+COPY tsconfig*.json ./
+COPY vite.config.ts ./
+COPY tailwind.config.js ./
+COPY postcss.config.js ./
+COPY eslint.config.js ./
+COPY index.html ./
+
+# Instalar dependencias
+RUN npm ci --only=production
+
+# Copiar código fuente
+COPY src/ ./src/
+
+# Construir la aplicación
+RUN npm run build
+
+# Etapa de producción con Nginx
+FROM nginx:alpine
+
+# Copiar archivos construidos
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Copiar configuración personalizada de Nginx
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Exponer puerto
+EXPOSE 80
+
+# Comando por defecto
+CMD ["nginx", "-g", "daemon off;"]
+
+# Metadata
+LABEL maintainer="Casa de Cambios Team"
+LABEL description="Frontend Dashboard React + Vite para Casa de Cambios"
+LABEL version="1.0.0"

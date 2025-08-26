@@ -1,0 +1,109 @@
+{
+  "name": "Error Logging Workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "id": "error-trigger-main",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3001/api/logs/webhook",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonParameters": {
+          "parameters": [
+            {
+              "name": "timestamp",
+              "value": "={{ DateTime.now().setZone('America/Asuncion').toISO() }}"
+            },
+            {
+              "name": "level",
+              "value": "error"
+            },
+            {
+              "name": "component",
+              "value": "n8n-workflow-error"
+            },
+            {
+              "name": "message",
+              "value": "={{ 'Error en workflow: ' + $json.workflow.name + ' - Nodo: ' + $json.node.name + ' - ' + $json.error.message }}"
+            },
+            {
+              "name": "details",
+              "value": "={{ $json }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        300
+      ],
+      "id": "log-error-to-dashboard",
+      "name": "Log Error to Dashboard",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Log Error to Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "error-logging-v1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "error-logging-workflow",
+  "tags": [
+    {
+      "id": "error-handling",
+      "name": "Error Handling"
+    },
+    {
+      "id": "logging",
+      "name": "Logging"
+    },
+    {
+      "id": "casa-de-cambios",
+      "name": "Casa de Cambios"
+    }
+  ]
+}

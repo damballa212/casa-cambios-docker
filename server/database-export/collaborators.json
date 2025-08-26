@@ -1,0 +1,47 @@
+{
+  "table": "collaborators",
+  "schema": null,
+  "data": [
+    {
+      "id": 64,
+      "name": "Mauricio",
+      "base_pct_usd_total": 5,
+      "tx_count": 0,
+      "created_at": "2025-08-25T18:52:48.274664+00:00",
+      "updated_at": "2025-08-25T18:52:48.274664+00:00"
+    },
+    {
+      "id": 22,
+      "name": "Jorge",
+      "base_pct_usd_total": 5,
+      "tx_count": 1,
+      "created_at": "2025-08-25T00:47:08.707901+00:00",
+      "updated_at": "2025-08-25T00:47:08.811474+00:00"
+    },
+    {
+      "id": 1,
+      "name": "Gabriel Zambrano",
+      "base_pct_usd_total": 0,
+      "tx_count": 9,
+      "created_at": "2025-08-22T21:55:43.50849+00:00",
+      "updated_at": "2025-08-25T03:25:23.39456+00:00"
+    },
+    {
+      "id": 3,
+      "name": "Anael",
+      "base_pct_usd_total": 2,
+      "tx_count": 24,
+      "created_at": "2025-08-22T21:55:43.50849+00:00",
+      "updated_at": "2025-08-25T03:50:35.842299+00:00"
+    },
+    {
+      "id": 2,
+      "name": "Patty",
+      "base_pct_usd_total": 5,
+      "tx_count": 18,
+      "created_at": "2025-08-22T21:55:43.50849+00:00",
+      "updated_at": "2025-08-25T22:37:56.509306+00:00"
+    }
+  ],
+  "exported_at": "2025-08-26T02:12:32.046Z"
+}

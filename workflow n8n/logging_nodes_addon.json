@@ -1,0 +1,140 @@
+{
+  "name": "Logging Nodes for Casa de Cambios Workflow",
+  "description": "Nodos adicionales para implementar logging híbrido en el workflow existente",
+  "implementation_guide": {
+    "step1": "Ejecutar migración SQL: server/database-export/system_logs_migration.sql",
+    "step2": "Reiniciar servidor Node.js para cargar endpoint /api/logs/webhook",
+    "step3": "Agregar nodos HTTP Request después de cada operación crítica",
+    "step4": "Configurar cada nodo con los parámetros mostrados abajo"
+  },
+  "node_configurations": {
+    "log_success_transaction": {
+      "type": "n8n-nodes-base.httpRequest",
+      "name": "Log Success - Transacción",
+      "position": "Después de 'Enviar WhatsApp'",
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3001/api/logs/webhook",
+        "sendHeaders": true,
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer n8n-webhook-token"
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body_fields": {
+          "timestamp": "{{ DateTime.now().setZone('America/Asuncion').toISO() }}",
+          "level": "success",
+          "component": "n8n-webhook",
+          "message": "Transacción procesada exitosamente",
+          "details": {
+            "workflowId": "Y4MAUCOCnLk4qYn9",
+            "executionId": "{{ $execution.id }}",
+            "chatId": "{{ $('Entrada WhatsApp').first().json.chatId }}",
+            "transactionData": "{{ $('Preparar Queries').first().json }}"
+          }
+        }
+      }
+    },
+    "log_success_rate": {
+      "type": "n8n-nodes-base.httpRequest",
+      "name": "Log Success - Tasa",
+      "position": "Después de 'Enviar WhatsApp1'",
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3001/api/logs/webhook",
+        "sendHeaders": true,
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer n8n-webhook-token"
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body_fields": {
+          "timestamp": "{{ DateTime.now().setZone('America/Asuncion').toISO() }}",
+          "level": "success",
+          "component": "n8n-webhook",
+          "message": "Tasa actualizada exitosamente",
+          "details": {
+            "workflowId": "Y4MAUCOCnLk4qYn9",
+            "executionId": "{{ $execution.id }}",
+            "chatId": "{{ $('Entrada WhatsApp').first().json.chatId }}",
+            "rateData": "{{ $('Procesar TASA').first().json }}"
+          }
+        }
+      }
+    },
+    "log_error_security": {
+      "type": "n8n-nodes-base.httpRequest",
+      "name": "Log Error - Seguridad",
+      "position": "Después de 'Enviar Error de Seguridad'",
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3001/api/logs/webhook",
+        "sendHeaders": true,
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer n8n-webhook-token"
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body_fields": {
+          "timestamp": "{{ DateTime.now().setZone('America/Asuncion').toISO() }}",
+          "level": "error",
+          "component": "n8n-webhook",
+          "message": "Error de seguridad detectado",
+          "details": {
+            "workflowId": "Y4MAUCOCnLk4qYn9",
+            "executionId": "{{ $execution.id }}",
+            "chatId": "{{ $('Entrada WhatsApp').first().json.chatId }}",
+            "errorData": "{{ $json }}"
+          }
+        }
+      }
+    },
+    "log_error_parser": {
+      "type": "n8n-nodes-base.httpRequest",
+      "name": "Log Error - Parser",
+      "position": "Después de 'Enviar Error Parser'",
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3001/api/logs/webhook",
+        "sendHeaders": true,
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer n8n-webhook-token"
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body_fields": {
+          "timestamp": "{{ DateTime.now().setZone('America/Asuncion').toISO() }}",
+          "level": "error",
+          "component": "n8n-webhook",
+          "message": "Error de formato detectado",
+          "details": {
+            "workflowId": "Y4MAUCOCnLk4qYn9",
+            "executionId": "{{ $execution.id }}",
+            "chatId": "{{ $('Entrada WhatsApp').first().json.chatId }}",
+            "errorData": "{{ $json }}"
+          }
+        }
+      }
+    }
+  },
+  "benefits": [
+    "Visibilidad completa del workflow en el dashboard",
+    "Logs en tiempo real de éxitos y errores",
+    "Trazabilidad completa de transacciones",
+    "Persistencia en base de datos para historial",
+    "Debugging mejorado con detalles de ejecución",
+    "Monitoreo de performance y errores"
+  ],
+  "next_steps": [
+    "1. Ejecutar migración SQL en Supabase",
+    "2. Reiniciar servidor Node.js",
+    "3. Agregar nodos HTTP Request al workflow",
+    "4. Configurar conexiones según las posiciones indicadas",
+    "5. Activar workflow y probar",
+    "6. Verificar logs en dashboard"
+  ]
+}
