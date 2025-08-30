@@ -1,19 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   BarChart3, 
   DollarSign, 
   Users, 
-  AlertTriangle, 
   TrendingUp, 
-  MessageSquare, 
   Database, 
   Settings,
   RefreshCw,
   Clock,
-  CheckCircle,
-  XCircle,
-  Eye,
-  Filter,
   UserCheck,
   LogOut,
   Shield
@@ -141,6 +135,20 @@ function App() {
   useEffect(() => {
     // Verificar autenticación al cargar
     checkAuthStatus();
+    
+    // Verificar conexión del backend independientemente de la autenticación
+    const checkBackendConnection = async () => {
+      try {
+        const isHealthy = await checkBackendHealth();
+        console.log('🏥 Initial backend health check result:', isHealthy);
+        setBackendConnected(isHealthy);
+      } catch (error) {
+        console.error('Error checking backend connection:', error);
+        setBackendConnected(false);
+      }
+    };
+    
+    checkBackendConnection();
   }, []);
 
   useEffect(() => {

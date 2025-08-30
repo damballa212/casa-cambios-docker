@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import AdvancedFilters, { FilterConfig } from './AdvancedFilters';
 import ExportModal, { ExportConfig } from './ExportModal';
+import TransactionDetailModal from './TransactionDetailModal';
 import jsPDF from 'jspdf';
 
 interface Transaction {
@@ -28,16 +29,18 @@ interface Transaction {
   chatId: string;
   idempotencyKey: string;
   gananciaGabriel?: number; // Ganancia específica de Gabriel
+  gananciaColaborador?: number; // Ganancia específica del colaborador
 }
 
 const TransactionsList: React.FC = () => {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isFilterLoading, setIsFilterLoading] = useState(false);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   
   // Estado de filtros avanzados
   const [filters, setFilters] = useState<FilterConfig>({
@@ -74,17 +77,22 @@ const TransactionsList: React.FC = () => {
           throw new Error('Error al cargar transacciones');
         }
         const data = await response.json();
-        // Calcular ganancia de Gabriel para cada transacción
+        // Calcular ganancias para cada transacción
         const transactionsWithGanancia = data.map((transaction: Transaction) => {
-          // Gabriel gana la diferencia entre la comisión total y lo que se paga al colaborador
           // Comisión total = usdTotal * (comision / 100)
-          // Ganancia Gabriel = Comisión total - Comisión del colaborador
           const comisionTotal = transaction.usdTotal * (transaction.comision / 100);
-          const gananciaGabriel = comisionTotal; // Por ahora toda la comisión va a Gabriel
+          
+          // Calcular ganancia del colaborador (por ejemplo, 30% de la comisión)
+          const porcentajeColaborador = 0.30; // 30% para el colaborador
+          const gananciaColaborador = comisionTotal * porcentajeColaborador;
+          
+          // Gabriel gana el resto de la comisión
+          const gananciaGabriel = comisionTotal - gananciaColaborador;
           
           return {
             ...transaction,
-            gananciaGabriel: gananciaGabriel
+            gananciaGabriel: gananciaGabriel,
+            gananciaColaborador: gananciaColaborador
           };
         });
         setTransactions(transactionsWithGanancia);
@@ -233,11 +241,47 @@ const TransactionsList: React.FC = () => {
     }
   };
 
+  // Función para aplicar filtros adicionales del modal de exportación
+  const applyExportFilters = (data: Transaction[], filters: any) => {
+    let filtered = [...data];
+    
+    // Aplicar filtro de colaborador si está especificado
+    if (filters.collaborator) {
+      filtered = filtered.filter(transaction => transaction.colaborador === filters.collaborator);
+    }
+    
+    // Aplicar filtro de cliente si está especificado
+    if (filters.client) {
+      filtered = filtered.filter(transaction => transaction.cliente === filters.client);
+    }
+    
+    // Aplicar filtro de estado si está especificado
+    if (filters.status) {
+      filtered = filtered.filter(transaction => transaction.status === filters.status);
+    }
+    
+    // Aplicar filtro de monto mínimo si está especificado
+    if (filters.minAmount !== undefined && filters.minAmount !== null) {
+      filtered = filtered.filter(transaction => transaction.usdTotal >= filters.minAmount);
+    }
+    
+    // Aplicar filtro de monto máximo si está especificado
+    if (filters.maxAmount !== undefined && filters.maxAmount !== null) {
+      filtered = filtered.filter(transaction => transaction.usdTotal <= filters.maxAmount);
+    }
+    
+    return filtered;
+  };
+
   // Función para manejar la exportación
   const handleExport = async (config: ExportConfig) => {
     try {
       // Simular proceso de exportación
       console.log('Exportando con configuración:', config);
+      
+      // Aplicar filtros adicionales del modal a los datos ya filtrados
+      const dataToExport = applyExportFilters(filteredTransactions, config.filters || {});
+      console.log(`Exportando ${dataToExport.length} transacciones de ${filteredTransactions.length} filtradas`);
       
       // Simular delay
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -248,22 +292,22 @@ const TransactionsList: React.FC = () => {
       // Generar y descargar archivo según el formato
       switch (config.format) {
         case 'csv':
-          const csvContent = generateCSV(filteredTransactions, config);
+          const csvContent = generateCSV(dataToExport, config);
           downloadFile(csvContent, `${baseFilename}.csv`, 'text/csv');
           break;
           
         case 'excel':
-          const excelContent = generateExcel(filteredTransactions, config);
+          const excelContent = generateExcel(dataToExport, config);
           downloadFile(excelContent, `${baseFilename}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
           break;
           
         case 'json':
-          const jsonContent = generateJSON(filteredTransactions, config);
+          const jsonContent = generateJSON(dataToExport, config);
           downloadFile(jsonContent, `${baseFilename}.json`, 'application/json');
           break;
           
         case 'pdf':
-            const pdfContent = generatePDF(filteredTransactions, config);
+            const pdfContent = generatePDF(dataToExport, config);
             downloadFile(pdfContent, `${baseFilename}.pdf`, 'application/pdf');
             break;
           
@@ -292,7 +336,9 @@ const TransactionsList: React.FC = () => {
     'status': 'Estado',
     'chatId': 'Chat ID',
     'gananciaGabriel': 'Ganancia Gabriel',
-     'gananciaGabrielTotal': 'Ganancia Gabriel Total'
+    'gananciaGabrielTotal': 'Ganancia Gabriel Total',
+    'gananciaColaborador': 'Ganancia Colaborador',
+    'gananciaColaboradorTotal': 'Ganancia Colaborador Total'
   });
 
   // Generar CSV
@@ -349,14 +395,14 @@ const TransactionsList: React.FC = () => {
     const exportData = data.map(transaction => {
       const item: any = {};
       config.fields.forEach(field => {
-          // Saltar gananciaGabrielTotal en datos de transacciones individuales
-          if (field === 'gananciaGabrielTotal') return;
+          // Saltar campos de totales en datos de transacciones individuales
+          if (field === 'gananciaGabrielTotal' || field === 'gananciaColaboradorTotal') return;
           
           const displayName = fieldMap[field as keyof typeof fieldMap] || field;
           let value = (transaction as any)[field];
           
           // Formateo especial para ciertos campos en JSON
-          if (field === 'gananciaGabriel' || field === 'usdTotal' || field === 'usdNeto') {
+          if (field === 'gananciaGabriel' || field === 'gananciaColaborador' || field === 'usdTotal' || field === 'usdNeto') {
             value = Number(value).toFixed(2);
           }
           
@@ -486,8 +532,8 @@ const TransactionsList: React.FC = () => {
         doc.text('DATOS DE TRANSACCIONES', margin, yPosition);
         yPosition += 15;
         
-        // Headers de tabla con estilo moderno (filtrar gananciaGabrielTotal)
-         const tableFields = config.fields.filter(field => field !== 'gananciaGabrielTotal');
+        // Headers de tabla con estilo moderno (filtrar campos de totales)
+         const tableFields = config.fields.filter(field => field !== 'gananciaGabrielTotal' && field !== 'gananciaColaboradorTotal');
          const headers = tableFields.map(field => fieldMap[field as keyof typeof fieldMap] || field);
          const colWidth = contentWidth / headers.length;
         
@@ -554,8 +600,8 @@ const TransactionsList: React.FC = () => {
             doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
           }
           
-          // Dibujar fila de datos (filtrar gananciaGabrielTotal)
-           const tableFields = config.fields.filter(field => field !== 'gananciaGabrielTotal');
+          // Dibujar fila de datos (filtrar campos de totales)
+           const tableFields = config.fields.filter(field => field !== 'gananciaGabrielTotal' && field !== 'gananciaColaboradorTotal');
            tableFields.forEach((field, fieldIndex) => {
              const value = (transaction as any)[field];
              let displayValue = String(value);
@@ -563,7 +609,7 @@ const TransactionsList: React.FC = () => {
              // Formateo especial por tipo de campo
               if (field === 'fecha') {
                 displayValue = new Date(value).toLocaleDateString('es-ES');
-              } else if (field === 'usdTotal' || field === 'usdNeto' || field === 'gananciaGabriel') {
+              } else if (field === 'usdTotal' || field === 'usdNeto' || field === 'gananciaGabriel' || field === 'gananciaColaborador') {
                 displayValue = `$${Number(value).toFixed(2)}`;
                 doc.setTextColor(22, 163, 74); // Verde para montos
               } else if (field === 'comision') {
@@ -667,6 +713,21 @@ const TransactionsList: React.FC = () => {
             doc.setFontSize(16);
             doc.setFont('helvetica', 'bold');
             doc.text(`$${totalGananciaGabriel.toFixed(2)}`, margin + 5, yPosition + 18);
+            yPosition += 35;
+          }
+          
+          // Card 6: Ganancia Colaborador (solo si está seleccionado gananciaColaboradorTotal)
+          if (config.fields.includes('gananciaColaboradorTotal')) {
+            const totalGananciaColaborador = data.reduce((sum, t) => sum + (t.gananciaColaborador || 0), 0);
+            doc.setFillColor(34, 197, 94); // Verde para colaboradores
+            doc.roundedRect(margin, yPosition, contentWidth, 25, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.text('GANANCIA COLABORADOR TOTAL', margin + 5, yPosition + 8);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text(`$${totalGananciaColaborador.toFixed(2)}`, margin + 5, yPosition + 18);
             yPosition += 35;
           }
          
@@ -800,11 +861,13 @@ const TransactionsList: React.FC = () => {
              { key: 'status', label: 'Estado', type: 'string' },
              { key: 'chatId', label: 'Chat ID', type: 'string' },
              { key: 'gananciaGabriel', label: 'Ganancia Gabriel (por transacción)', type: 'number' },
-             { key: 'gananciaGabrielTotal', label: 'Ganancia Gabriel Total (solo en resumen)', type: 'number' }
+             { key: 'gananciaGabrielTotal', label: 'Ganancia Gabriel Total (solo en resumen)', type: 'number' },
+             { key: 'gananciaColaborador', label: 'Ganancia Colaborador (por transacción)', type: 'number' },
+             { key: 'gananciaColaboradorTotal', label: 'Ganancia Colaborador Total (solo en resumen)', type: 'number' }
            ]}
          availableFilters={{
-           collaborators: [...new Set(transactions.map(t => t.colaborador))].filter(Boolean),
-           clients: [...new Set(transactions.map(t => t.cliente))].filter(Boolean),
+           collaborators: [...new Set(filteredTransactions.map(t => t.colaborador))].filter(Boolean),
+           clients: [...new Set(filteredTransactions.map(t => t.cliente))].filter(Boolean),
            statuses: ['completed', 'pending', 'failed']
          }}
          onExport={handleExport}
@@ -824,35 +887,35 @@ const TransactionsList: React.FC = () => {
       {!loading && !error && (
         <div className="bg-white/70 backdrop-blur-md rounded-2xl border border-gray-200/50 shadow-lg overflow-hidden">
           <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50/70">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Colaborador</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">USD Total</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Comisión %</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tasa Usada</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Monto Gs</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
-              </tr>
+            <table className="w-full min-w-max">
+              <thead className="bg-gray-50/70">
+                <tr>
+                  <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">ID</th>
+                  <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Fecha</th>
+                  <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">Cliente</th>
+                  <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Colaborador</th>
+                  <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">USD Total</th>
+                  <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Comisión %</th>
+                  <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Tasa Usada</th>
+                  <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Monto Gs</th>
+                  <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Estado</th>
+                  <th className="px-4 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Acción</th>
+                </tr>
             </thead>
             <tbody className="bg-white/30 divide-y divide-gray-200/50">
               {filteredTransactions.map((transaction) => (
                 <tr key={transaction.id} className="hover:bg-gray-50/30 transition-colors duration-200">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900 w-16">
                     {transaction.id}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 w-32">
                     {new Date(transaction.fecha).toLocaleDateString()}
                     <br />
                     <span className="text-xs text-gray-400">
                       {new Date(transaction.fecha).toLocaleTimeString()}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-4 whitespace-nowrap w-40">
                     <div className="flex items-center">
                       <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center mr-3">
                         <User className="w-4 h-4 text-white" />
@@ -863,22 +926,22 @@ const TransactionsList: React.FC = () => {
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{transaction.colaborador}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 w-32">{transaction.colaborador}</td>
+                  <td className="px-4 py-4 whitespace-nowrap w-28">
                     <div className="flex items-center">
                       <DollarSign className="w-4 h-4 text-green-500 mr-1" />
                       <span className="text-sm font-medium text-gray-900">${transaction.usdTotal.toFixed(2)}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{transaction.comision}%</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 w-24">{transaction.comision}%</td>
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 w-28">
                     <span className="font-medium text-blue-600">{transaction.tasaUsada.toLocaleString()}</span>
                     <span className="text-xs text-gray-500 ml-1">Gs/$</span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 w-32">
                     {transaction.montoGs.toLocaleString()} Gs
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-4 whitespace-nowrap w-32">
                     <div className="flex items-center space-x-2">
                       {getStatusIcon(transaction.status)}
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(transaction.status)}`}>
@@ -887,10 +950,14 @@ const TransactionsList: React.FC = () => {
                       </span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <td className="px-4 py-4 whitespace-nowrap text-center w-20">
                     <button
-                      onClick={() => setSelectedTransaction(transaction)}
-                      className="text-blue-600 hover:text-blue-900 transition-colors duration-200"
+                      onClick={() => {
+                        setSelectedTransaction(transaction);
+                        setIsDetailModalOpen(true);
+                      }}
+                      className="text-blue-600 hover:text-blue-900 transition-colors duration-200 inline-flex items-center justify-center"
+                      title="Ver detalles de la transacción"
                     >
                       <Eye className="w-4 h-4" />
                     </button>
@@ -950,6 +1017,16 @@ const TransactionsList: React.FC = () => {
         </div>
       </div>
       )}
+      
+      {/* Transaction Detail Modal */}
+      <TransactionDetailModal
+        isOpen={isDetailModalOpen}
+        onClose={() => {
+          setIsDetailModalOpen(false);
+          setSelectedTransaction(null);
+        }}
+        transaction={selectedTransaction}
+      />
     </div>
   );
 };

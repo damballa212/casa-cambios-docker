@@ -1,6 +1,9 @@
 // API Service para conectar con el backend de Casa de Cambios
 
-const API_BASE_URL = 'http://localhost:3001/api';
+// En producción (Docker), usar URLs relativas. En desarrollo, usar localhost
+const API_BASE_URL = window.location.hostname === 'localhost' 
+  ? 'http://localhost:3001/api'
+  : '/api';
 
 // Tipos de datos
 export interface Transaction {
@@ -163,12 +166,31 @@ class ApiService {
 
   // Health check
   async healthCheck(): Promise<{ status: string; timestamp: string; database: string }> {
-    return fetch('http://localhost:3001/health')
-      .then(res => res.json())
-      .catch(error => {
-        console.error('Health check failed:', error);
-        return { status: 'ERROR', timestamp: new Date().toISOString(), database: 'Disconnected' };
+    try {
+      console.log('🏥 Making health check request...');
+      const healthUrl = window.location.hostname === 'localhost' 
+        ? 'http://localhost:3001/health'
+        : '/health';
+      const response = await fetch(healthUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
+      
+      console.log('🏥 Health check response status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`Health check failed with status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('🏥 Health check data:', data);
+      return data;
+    } catch (error) {
+      console.error('🏥 Health check failed:', error);
+      return { status: 'ERROR', timestamp: new Date().toISOString(), database: 'Disconnected' };
+    }
   }
 
   // ==========================================
@@ -288,37 +310,7 @@ class ApiService {
   // OVERRIDE DEL MÉTODO FETCHAPI PARA INCLUIR TOKEN
   // ==========================================
 
-  private async fetchApiWithAuth<T>(endpoint: string, options?: RequestInit): Promise<T> {
-    const token = this.getStoredToken();
-    
-    const authOptions = {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-        ...options?.headers,
-      },
-    };
-
-    try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, authOptions);
-
-      if (response.status === 401) {
-        // Token expirado o inválido
-        this.clearStoredToken();
-        throw new Error('Sesión expirada. Por favor inicie sesión nuevamente.');
-      }
-
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status} ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error(`Error fetching ${endpoint}:`, error);
-      throw error;
-    }
-  }
+  // Función fetchApiWithAuth eliminada por no estar en uso
 }
 
 // Instancia singleton del servicio API
@@ -352,9 +344,14 @@ export const handleApiError = (error: any) => {
 // Función para verificar si el backend está disponible
 export const checkBackendHealth = async (): Promise<boolean> => {
   try {
+    console.log('🏥 Checking backend health...');
     const health = await apiService.healthCheck();
-    return health.status === 'OK';
-  } catch {
+    console.log('🏥 Health response:', health);
+    const isHealthy = health.status === 'OK';
+    console.log('🏥 Is healthy:', isHealthy);
+    return isHealthy;
+  } catch (error) {
+    console.error('🏥 Health check failed:', error);
     return false;
   }
 };

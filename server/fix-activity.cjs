@@ -46,8 +46,9 @@ async function fixActivityReciente() {
     const loginForm = await page.$('form');
     if (loginForm) {
       console.log('🔐 Realizando login...');
-      await page.type('input[type="text"]', 'admin');
-      await page.type('input[type="password"]', 'admin123');
+      // NOTA: Configurar credenciales a través de variables de entorno
+    await page.type('input[type="text"]', process.env.ADMIN_USERNAME || 'admin');
+    await page.type('input[type="password"]', process.env.ADMIN_PASSWORD || 'defaultpass');
       await page.click('button[type="submit"]');
       await new Promise(resolve => setTimeout(resolve, 3000));
     }

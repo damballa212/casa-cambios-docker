@@ -33,9 +33,9 @@ cd ..
 
 ### 2. Configurar Base de Datos Supabase
 
-#### Credenciales actuales:
-- **URL**: `https://ixvefxnycehbvipxcngv.supabase.co`
-- **Password**: `marlon212`
+#### Configuración de Base de Datos:
+- **URL**: Configurada en variables de entorno
+- **Credenciales**: Configuradas en `server/.env` (ver `.env.example`)
 - **Puerto**: `5432`
 
 #### Crear las tablas necesarias en Supabase:
@@ -102,9 +102,9 @@ INSERT INTO collaborators (name, base_pct_usd_total) VALUES
 El archivo `server/.env` ya está configurado con las credenciales proporcionadas:
 
 ```env
-SUPABASE_URL=https://ixvefxnycehbvipxcngv.supabase.co
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-DB_PASSWORD=marlon212
+SUPABASE_URL=https://tu-proyecto.supabase.co
+SUPABASE_ANON_KEY=tu_anon_key_aqui
+DB_PASSWORD=tu_password_aqui
 PORT=3001
 ```
 

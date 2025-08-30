@@ -1,7 +1,7 @@
-# Dockerfile para Backend Node.js + Express
+# Backend Dockerfile para Casa de Cambios API
 FROM node:18-alpine
 
-# Instalar dependencias del sistema necesarias para algunas librerías
+# Instalar dependencias del sistema para Puppeteer
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -9,8 +9,19 @@ RUN apk add --no-cache \
     freetype-dev \
     harfbuzz \
     ca-certificates \
-    ttf-freefont \
-    git
+    ttf-freefont
+
+# Establecer directorio de trabajo
+WORKDIR /app
+
+# Copiar archivos de dependencias del servidor
+COPY server/package*.json ./
+
+# Instalar dependencias
+RUN npm ci --only=production
+
+# Copiar código fuente del servidor
+COPY server/ .
 
 # Configurar Puppeteer para usar Chromium instalado
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
@@ -20,40 +31,12 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
 RUN addgroup -g 1001 -S nodejs
 RUN adduser -S nodejs -u 1001
 
-# Establecer directorio de trabajo
-WORKDIR /app
-
-# Cambiar propietario del directorio
+# Cambiar propiedad de archivos
 RUN chown -R nodejs:nodejs /app
 USER nodejs
 
-# Copiar archivos de configuración
-COPY --chown=nodejs:nodejs server/package*.json ./
-
-# Instalar dependencias
-RUN npm ci --only=production && npm cache clean --force
-
-# Copiar código fuente del servidor
-COPY --chown=nodejs:nodejs server/ ./
-
-# Crear directorio para logs
-RUN mkdir -p logs
-
-# Exponer puerto
+# Exponer puerto (EasyPanel lo asignará automáticamente)
 EXPOSE 3001
 
-# Variables de entorno por defecto
-ENV NODE_ENV=production
-ENV PORT=3001
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
-
-# Comando por defecto
-CMD ["node", "server.js"]
-
-# Metadata
-LABEL maintainer="Casa de Cambios Team"
-LABEL description="Backend API Node.js + Express para Casa de Cambios"
-LABEL version="1.0.0"
+# Comando de inicio
+CMD ["npm", "start"]

@@ -20,24 +20,25 @@ export const setupActivityEndpoint = (app, supabase, dbConnected, PORT) => {
     try {
       const activities = [];
       
-      // 1. Obtener transacciones recientes (últimas 5)
+      // 1. Obtener transacciones recientes (últimas 3)
       if (supabase) {
         const { data: recentTransactions } = await supabase
           .from('transactions')
           .select('*')
           .order('fecha', { ascending: false })
-          .limit(5);
+          .limit(3);
         
         if (recentTransactions && recentTransactions.length > 0) {
           recentTransactions.forEach((tx, index) => {
             const timeAgo = getTimeAgo(new Date(tx.fecha));
+            const montoFormatted = parseFloat(tx.usd_total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             activities.push({
               id: `tx-${tx.id}`,
-              message: `Nueva transacción procesada: $${tx.usd_total} USD - ${tx.cliente}`,
+              message: `💰 Transacción procesada: $${montoFormatted} USD - ${tx.cliente}`,
               time: timeAgo,
               status: 'success',
               timestamp: tx.fecha,
-              component: 'transactions',
+              component: 'transacciones',
               details: {
                 cliente: tx.cliente,
                 colaborador: tx.colaborador,
@@ -49,63 +50,79 @@ export const setupActivityEndpoint = (app, supabase, dbConnected, PORT) => {
         }
       }
       
-      // 2. Obtener logs del sistema recientes
+      // 2. Obtener cambios de tasa recientes (últimos 2)
       if (supabase) {
         try {
-          const { data: systemLogs } = await supabase
+          const { data: rateChanges } = await supabase
+            .from('global_rate')
+            .select('*')
+            .order('updated_at', { ascending: false })
+            .limit(2);
+          
+          if (rateChanges && rateChanges.length > 0) {
+            rateChanges.forEach((rate, index) => {
+              const timeAgo = getTimeAgo(new Date(rate.updated_at));
+              const rateFormatted = parseFloat(rate.rate).toLocaleString('es-PY');
+              activities.push({
+                id: `rate-${rate.id}`,
+                message: `📈 Tasa actualizada: ${rateFormatted} Gs/USD`,
+                time: timeAgo,
+                status: 'info',
+                timestamp: rate.updated_at,
+                component: 'tasas',
+                details: {
+                  nuevaTasa: rate.rate,
+                  fecha: rate.updated_at
+                }
+              });
+            });
+          }
+        } catch (dbError) {
+          console.log('Error obteniendo cambios de tasa:', dbError.message);
+        }
+      }
+      
+      // 3. Obtener logs de exportaciones recientes
+      if (supabase) {
+        try {
+          const { data: exportLogs } = await supabase
             .from('system_logs')
             .select('*')
+            .ilike('message', '%export%')
             .order('timestamp', { ascending: false })
-            .limit(10);
+            .limit(2);
           
-          if (systemLogs && systemLogs.length > 0) {
-            systemLogs.forEach(log => {
+          if (exportLogs && exportLogs.length > 0) {
+            exportLogs.forEach(log => {
               const timeAgo = getTimeAgo(new Date(log.timestamp));
               activities.push({
-                id: `log-${log.id}`,
-                message: log.message,
+                id: `export-${log.id}`,
+                message: `📊 ${log.message}`,
                 time: timeAgo,
-                status: log.level === 'error' ? 'error' : 
-                       log.level === 'warning' ? 'warning' : 
-                       log.level === 'success' ? 'success' : 'info',
+                status: 'success',
                 timestamp: log.timestamp,
-                component: log.component,
+                component: 'exportaciones',
                 details: log.details
               });
             });
           }
         } catch (dbError) {
-          console.log('Tabla system_logs no disponible, usando solo transacciones');
+          console.log('Error obteniendo logs de exportaciones:', dbError.message);
         }
       }
       
-      // 3. Agregar eventos del sistema en tiempo real
-      const now = new Date();
-      activities.push(
-        {
-          id: 'sys-health',
-          message: `Sistema de salud verificado - Estado: ${dbConnected ? 'Conectado' : 'Desconectado'}`,
-          time: 'Hace 1 minuto',
-          status: dbConnected ? 'success' : 'warning',
-          timestamp: new Date(now.getTime() - 60000).toISOString(),
-          component: 'sistema',
-          details: { database: dbConnected, port: PORT }
-        },
-        {
-          id: 'sys-api',
-          message: 'API Backend operativo en puerto 3001',
-          time: 'Hace 5 minutos',
-          status: 'success',
-          timestamp: new Date(now.getTime() - 300000).toISOString(),
-          component: 'api',
-          details: { endpoint: '/api', status: 'running' }
-        }
-      );
+      // NO AGREGAR DATOS DEMO - Solo devolver datos reales de la base de datos
+      console.log('📊 Actividades reales encontradas:', activities.length);
       
-      // 4. Ordenar por timestamp y limitar a 15 elementos
+      // Si no hay datos reales, devolver array vacío
+      if (activities.length === 0) {
+        console.log('⚠️ No hay actividades reales en la base de datos');
+      }
+      
+      // 5. Ordenar por timestamp y limitar a exactamente 3 elementos
       const sortedActivities = activities
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-        .slice(0, 15);
+        .slice(0, 3);
       
       res.json(sortedActivities);
       

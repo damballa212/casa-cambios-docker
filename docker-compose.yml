@@ -1,13 +1,12 @@
+version: '3.8'
+
 services:
-  # Backend API
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
-    restart: unless-stopped
     environment:
       - NODE_ENV=production
-      - PORT=3001
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
@@ -18,37 +17,28 @@ services:
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
       - JWT_SECRET=${JWT_SECRET}
-      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-24h}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
       - REDIS_URL=${REDIS_URL}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-60000}
-      - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-100}
-      - BCRYPT_ROUNDS=${BCRYPT_ROUNDS:-12}
+      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS}
+      - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS}
+      - BCRYPT_ROUNDS=${BCRYPT_ROUNDS}
       - SESSION_SECRET=${SESSION_SECRET}
-    volumes:
-      - backend_logs:/app/logs
-    networks:
-      - casa-cambios-network
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
-  # Frontend Dashboard
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
-    restart: unless-stopped
-    expose:
-      - "80"  # Puerto expuesto internamente
     depends_on:
-      backend:
-        condition: service_healthy
-    networks:
-      - casa-cambios-network
+      - backend
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
       interval: 30s
@@ -56,46 +46,6 @@ services:
       retries: 3
       start_period: 40s
 
-  # Redis para Rate Limiting (opcional)
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-defaultpassword}
-    volumes:
-      - redis_data:/data
-    networks:
-      - casa-cambios-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
-      interval: 30s
-      timeout: 3s
-      retries: 5
-
-volumes:
-  backend_logs:
-    driver: local
-  redis_data:
-    driver: local
-
 networks:
-  casa-cambios-network:
+  default:
     driver: bridge
-    name: casa-cambios-network
-
-# Configuración adicional para EasyPanel
-x-easypanel:
-  name: casa-cambios
-  description: "Sistema completo de Casa de Cambios con Dashboard y API"
-  version: "1.0.0"
-  ports:
-    - "8847:80"
-  environment:
-    - SUPABASE_URL
-    - SUPABASE_ANON_KEY
-    - SUPABASE_SERVICE_ROLE_KEY
-    - DATABASE_URL
-    - JWT_SECRET
-    - REDIS_PASSWORD
-  volumes:
-    - backend_logs
-    - redis_data

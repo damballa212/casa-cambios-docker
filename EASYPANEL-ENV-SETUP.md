@@ -1,120 +1,153 @@
-# 🔧 Configuración de Variables de Entorno en EasyPanel
+# Configuración de Variables de Entorno para EasyPanel
 
-## ⚠️ IMPORTANTE
+## 📋 Variables Requeridas
 
-Las variables de entorno deben configurarse directamente en EasyPanel, no se leen automáticamente del archivo `.env` del repositorio.
+Configura estas variables de entorno en tu aplicación de EasyPanel:
 
-## 📋 Variables Requeridas para EasyPanel
-
-Copia y pega estas variables en la sección **Environment Variables** de tu servicio en EasyPanel:
-
-### 🔑 Variables Obligatorias (DEBES CAMBIAR ESTOS VALORES)
-
-```env
-SUPABASE_URL=https://ixvefxnycehbvipxcngv.supabase.co
-SUPABASE_ANON_KEY=tu_clave_anon_real_aqui
-SUPABASE_SERVICE_ROLE_KEY=tu_clave_service_role_real_aqui
-DATABASE_URL=postgresql://postgres.proyecto:tu_password@host:5432/postgres
-DB_HOST=tu_host_supabase.supabase.co
-DB_PORT=5432
-DB_NAME=postgres
-DB_USER=postgres.proyecto
-DB_PASSWORD=tu_password_real
-JWT_SECRET=tu_secreto_jwt_minimo_32_caracteres_muy_seguro_2024
-SESSION_SECRET=tu_secreto_session_minimo_32_caracteres_muy_seguro_2024
+### 🗄️ Supabase Configuration
+```
+SUPABASE_URL=https://tu-proyecto.supabase.co
+SUPABASE_ANON_KEY=tu_anon_key_aqui
+SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key_aqui
 ```
 
-### 🔧 Variables Opcionales (Puedes usar estos valores)
+### 🐘 PostgreSQL Configuration
+```
+DATABASE_URL=postgresql://postgres.tu-proyecto:tu_password@aws-region.pooler.supabase.com:5432/postgres?sslmode=require
+DB_HOST=aws-region.pooler.supabase.com
+DB_PORT=5432
+DB_NAME=postgres
+DB_USER=postgres.tu-proyecto
+DB_PASSWORD=tu_password_aqui
+```
 
-```env
-NODE_ENV=production
-PORT=3001
+### 🔐 JWT Configuration
+```
+JWT_SECRET=casa_cambios_jwt_secret_super_seguro_minimo_32_caracteres_2024
 JWT_EXPIRES_IN=24h
-REDIS_URL=redis://redis:6379
-REDIS_PASSWORD=casa_cambios_redis_password_2024
+```
+
+### 🚦 Rate Limiting Configuration
+```
 RATE_LIMIT_WINDOW_MS=60000
-RATE_LIMIT_MAX_REQUESTS=100
+RATE_LIMIT_MAX_REQUESTS=10
+```
+
+### 🛡️ Security Configuration
+```
 BCRYPT_ROUNDS=12
-LOG_LEVEL=info
-LOG_FORMAT=combined
-PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+SESSION_SECRET=casa_cambios_session_secret_super_seguro_minimo_32_caracteres_2024
+```
+
+### 📊 Redis Configuration (Opcional)
+```
+REDIS_URL=redis://localhost:6379
+REDIS_PASSWORD=
 ```
 
 ## 🚀 Pasos para Configurar en EasyPanel
 
-### 1. Acceder a tu Servicio
-- Ve a tu proyecto en EasyPanel
-- Selecciona el servicio "casa-cambios"
-- Ve a la pestaña **Settings** o **Environment**
+### 1. Crear Nuevo Proyecto
+1. Ve a tu panel de EasyPanel
+2. Clic en "New" para crear un nuevo proyecto
+3. Proporciona un nombre para tu proyecto (ej: "casa-cambios")
+4. Clic en "Create" para completar la creación
 
-### 2. Agregar Variables de Entorno
-- Busca la sección **Environment Variables**
-- Agrega cada variable una por una:
-  - **Key**: Nombre de la variable (ej: `SUPABASE_URL`)
-  - **Value**: Valor de la variable (ej: `https://ixvefxnycehbvipxcngv.supabase.co`)
+### 2. Configurar Servicio de Aplicación
+1. Dentro del proyecto, clic en "+ Service"
+2. Selecciona "App" como tipo de servicio
+3. En la sección "Source":
+   - Selecciona "Github Repository" o "Custom Git Provider"
+   - Conecta tu repositorio
+   - Especifica la rama (ej: main)
 
-### 3. Obtener Credenciales Reales de Supabase
+### 3. Configurar Build
+1. Ve a la pestaña "Build"
+2. Selecciona "Dockerfile" como método de build
+3. **IMPORTANTE**: Especifica el archivo Docker Compose:
+   - Archivo: `docker-compose.easypanel.yml`
+   - O usa Dockerfile individual si prefieres servicios separados
 
-#### Para SUPABASE_ANON_KEY y SUPABASE_SERVICE_ROLE_KEY:
-1. Ve a tu proyecto en [Supabase Dashboard](https://supabase.com/dashboard)
-2. Ve a **Settings** → **API**
-3. Copia:
-   - **anon public**: Para `SUPABASE_ANON_KEY`
-   - **service_role**: Para `SUPABASE_SERVICE_ROLE_KEY`
+### 4. Configurar Variables de Entorno
+1. Ve a la pestaña "Environment"
+2. Agrega cada variable una por una (ver lista completa arriba)
+3. **NO hardcodees valores sensibles** - usa las variables de entorno
 
-#### Para DATABASE_URL y credenciales DB:
-1. En Supabase, ve a **Settings** → **Database**
-2. Busca **Connection string**
-3. Usa el formato: `postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres`
+### 5. Configurar Dominio y Proxy
+1. Ve a la pestaña "Domains & Proxy"
+2. Agrega tu dominio personalizado
+3. **CRÍTICO**: Configura el "Proxy Port" a **80** (puerto interno de Nginx)
+4. EasyPanel configurará automáticamente:
+   - Certificados SSL Let's Encrypt
+   - Proxy reverso con Traefik
+   - Balanceador de carga
 
-### 4. Generar Secretos Seguros
+### 6. Desplegar
+1. Clic en "Deploy"
+2. EasyPanel automáticamente:
+   - Construirá las imágenes Docker
+   - Desplegará los contenedores
+   - Configurará el proxy
+3. Monitorea los logs durante el despliegue
 
-#### Para JWT_SECRET y SESSION_SECRET:
+## 🔍 Verificación Post-Despliegue
+
+### Health Checks
+1. **Backend Health**: `https://tu-dominio.com/health`
+2. **Frontend**: `https://tu-dominio.com`
+3. **API Test**: `https://tu-dominio.com/api/dashboard/metrics`
+
+### Logs a Revisar
 ```bash
-# Genera secretos seguros de 32+ caracteres
-openssl rand -base64 32
+# En EasyPanel, revisa los logs de:
+- backend: Conexión a Supabase
+- frontend: Build exitoso de Vite
+- nginx: Configuración de proxy
 ```
 
-O usa este generador online: https://generate-secret.vercel.app/32
+## ⚠️ Notas Importantes
 
-### 5. Reiniciar el Servicio
-- Después de agregar todas las variables
-- Haz clic en **Deploy** o **Restart**
-- Espera a que el servicio se reinicie
+### Seguridad
+- **NUNCA** hardcodees credenciales en el código
+- Usa variables de entorno para todos los secretos
+- Rota regularmente JWT_SECRET y SESSION_SECRET
+- Mantén actualizadas las credenciales de Supabase
 
-## ✅ Verificación
+### Puertos
+- **NO especifiques puertos** en la configuración
+- EasyPanel asignará puertos automáticamente
+- La comunicación interna usa nombres de servicio
 
-Después de configurar las variables:
+### Red
+- Los servicios se comunican a través de la red Docker interna
+- Solo el frontend está expuesto públicamente
+- El backend es accesible solo desde el frontend
 
-1. **Verifica que no hay warnings**:
-   - Ve a los logs del servicio
-   - No deberías ver más mensajes de "variable is not set"
+## 🛠️ Troubleshooting
 
-2. **Prueba la aplicación**:
-   - Accede a tu dominio de EasyPanel
-   - Verifica que el login funciona
-   - Comprueba que se conecta a Supabase
+### Error: "Cannot connect to Supabase"
+1. Verifica `SUPABASE_URL` y `SUPABASE_ANON_KEY`
+2. Comprueba que Supabase esté activo
+3. Revisa los logs del backend
 
-## 🚨 Troubleshooting
+### Error: "Database connection failed"
+1. Verifica todas las variables `DB_*`
+2. Comprueba que la IP del VPS esté en la whitelist de Supabase
+3. Verifica la configuración de red
 
-### Si sigues viendo warnings:
-1. **Verifica que escribiste correctamente** los nombres de las variables
-2. **Reinicia el servicio** después de agregar variables
-3. **Revisa los logs** para errores específicos
+### Error: "Frontend no carga"
+1. Verifica que el build de Vite sea exitoso
+2. Comprueba los logs del contenedor frontend
+3. Verifica la configuración de Nginx
 
-### Si la aplicación no funciona:
-1. **Verifica las credenciales de Supabase** en el dashboard
-2. **Comprueba la conectividad** de la base de datos
-3. **Revisa que los secretos** tengan al menos 32 caracteres
+### Error: "API calls fail"
+1. Verifica que ambos servicios estén corriendo
+2. Comprueba la configuración del proxy en nginx.conf
+3. Revisa los logs de red entre servicios
 
-## 📞 Soporte
+## 📞 Contacto
 
-Si necesitas ayuda:
-1. Verifica que todas las variables estén configuradas
-2. Revisa los logs del servicio en EasyPanel
-3. Comprueba la conectividad con Supabase
-
----
-
-**🎯 Una vez configuradas todas las variables, tu aplicación Casa de Cambios funcionará perfectamente en EasyPanel!**
+Para soporte adicional:
+- Revisa los logs detallados en EasyPanel
+- Verifica la configuración paso a paso
+- Contacta al equipo de desarrollo si persisten los problemas

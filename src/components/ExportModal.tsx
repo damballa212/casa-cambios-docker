@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Download, 
@@ -10,7 +10,11 @@ import {
   Settings, 
   CheckCircle,
   AlertCircle,
-  Info
+  Info,
+  Save,
+  FolderOpen,
+  Trash2,
+  Edit3
 } from 'lucide-react';
 
 // Tipos de datos que se pueden exportar
@@ -39,6 +43,16 @@ export interface ExportConfig {
   includeHeaders: boolean;
   includeMetadata: boolean;
   customFilename?: string;
+}
+
+// Configuración guardada con nombre
+export interface SavedExportConfig {
+  id: string;
+  name: string;
+  description?: string;
+  config: ExportConfig;
+  createdAt: string;
+  lastUsed?: string;
 }
 
 // Props del modal
@@ -139,6 +153,52 @@ const EXPORT_FORMATS = {
   }
 };
 
+// Funciones para manejar configuraciones guardadas
+const STORAGE_KEY = 'export_configurations';
+
+const getSavedConfigurations = (dataType: ExportDataType): SavedExportConfig[] => {
+  try {
+    const saved = localStorage.getItem(`${STORAGE_KEY}_${dataType}`);
+    return saved ? JSON.parse(saved) : [];
+  } catch (error) {
+    console.error('Error loading saved configurations:', error);
+    return [];
+  }
+};
+
+const saveConfiguration = (dataType: ExportDataType, config: SavedExportConfig): void => {
+  try {
+    const existing = getSavedConfigurations(dataType);
+    const updated = existing.filter(c => c.id !== config.id);
+    updated.push(config);
+    localStorage.setItem(`${STORAGE_KEY}_${dataType}`, JSON.stringify(updated));
+  } catch (error) {
+    console.error('Error saving configuration:', error);
+  }
+};
+
+const deleteConfiguration = (dataType: ExportDataType, configId: string): void => {
+  try {
+    const existing = getSavedConfigurations(dataType);
+    const updated = existing.filter(c => c.id !== configId);
+    localStorage.setItem(`${STORAGE_KEY}_${dataType}`, JSON.stringify(updated));
+  } catch (error) {
+    console.error('Error deleting configuration:', error);
+  }
+};
+
+const updateLastUsed = (dataType: ExportDataType, configId: string): void => {
+  try {
+    const existing = getSavedConfigurations(dataType);
+    const updated = existing.map(c => 
+      c.id === configId ? { ...c, lastUsed: new Date().toISOString() } : c
+    );
+    localStorage.setItem(`${STORAGE_KEY}_${dataType}`, JSON.stringify(updated));
+  } catch (error) {
+    console.error('Error updating last used:', error);
+  }
+};
+
 const ExportModal: React.FC<ExportModalProps> = ({
   isOpen,
   onClose,
@@ -151,6 +211,13 @@ const ExportModal: React.FC<ExportModalProps> = ({
   const [currentStep, setCurrentStep] = useState(1);
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
+  
+  // Estados para configuraciones guardadas
+  const [savedConfigurations, setSavedConfigurations] = useState<SavedExportConfig[]>([]);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [showLoadDialog, setShowLoadDialog] = useState(false);
+  const [saveConfigName, setSaveConfigName] = useState('');
+  const [saveConfigDescription, setSaveConfigDescription] = useState('');
   
   const config = DATA_TYPE_CONFIGS[dataType];
   const IconComponent = config.icon;
@@ -169,6 +236,13 @@ const ExportModal: React.FC<ExportModalProps> = ({
     includeHeaders: true,
     includeMetadata: true
   });
+
+  // Cargar configuraciones guardadas al abrir el modal
+  useEffect(() => {
+    if (isOpen) {
+      setSavedConfigurations(getSavedConfigurations(dataType));
+    }
+  }, [isOpen, dataType]);
 
   // Manejar cambio de preset de fecha
   const handleDatePresetChange = (preset: string) => {
@@ -227,6 +301,37 @@ const ExportModal: React.FC<ExportModalProps> = ({
     }));
   };
 
+  // Funciones para manejar configuraciones
+  const handleSaveConfiguration = () => {
+    if (!saveConfigName.trim()) return;
+    
+    const newConfig: SavedExportConfig = {
+      id: Date.now().toString(),
+      name: saveConfigName.trim(),
+      description: saveConfigDescription.trim() || undefined,
+      config: { ...exportConfig },
+      createdAt: new Date().toISOString()
+    };
+    
+    saveConfiguration(dataType, newConfig);
+    setSavedConfigurations(getSavedConfigurations(dataType));
+    setShowSaveDialog(false);
+    setSaveConfigName('');
+    setSaveConfigDescription('');
+  };
+  
+  const handleLoadConfiguration = (savedConfig: SavedExportConfig) => {
+    setExportConfig({ ...savedConfig.config, dataType });
+    updateLastUsed(dataType, savedConfig.id);
+    setSavedConfigurations(getSavedConfigurations(dataType));
+    setShowLoadDialog(false);
+  };
+  
+  const handleDeleteConfiguration = (configId: string) => {
+    deleteConfiguration(dataType, configId);
+    setSavedConfigurations(getSavedConfigurations(dataType));
+  };
+
   // Ejecutar exportación
   const handleExport = async () => {
     setIsExporting(true);
@@ -280,12 +385,33 @@ const ExportModal: React.FC<ExportModalProps> = ({
               <p className="text-sm text-gray-600">{config.description}</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100/50 rounded-lg transition-colors duration-200"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center space-x-2">
+            {/* Botón Cargar Configuración */}
+            <button
+              onClick={() => setShowLoadDialog(true)}
+              className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors duration-200"
+              title="Cargar configuración guardada"
+            >
+              <FolderOpen className="w-5 h-5" />
+            </button>
+            
+            {/* Botón Guardar Configuración */}
+            <button
+              onClick={() => setShowSaveDialog(true)}
+              className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors duration-200"
+              title="Guardar configuración actual"
+            >
+              <Save className="w-5 h-5" />
+            </button>
+            
+            {/* Botón Cerrar */}
+            <button
+              onClick={onClose}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100/50 rounded-lg transition-colors duration-200"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Progress Steps */}
@@ -650,6 +776,127 @@ const ExportModal: React.FC<ExportModalProps> = ({
           </div>
         </div>
       </div>
+      
+      {/* Modal para Guardar Configuración */}
+      {showSaveDialog && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-60">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Guardar Configuración</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Nombre de la configuración</label>
+                <input
+                  type="text"
+                  value={saveConfigName}
+                  onChange={(e) => setSaveConfigName(e.target.value)}
+                  placeholder="Ej: Reporte mensual colaboradores"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  maxLength={50}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Descripción (opcional)</label>
+                <textarea
+                  value={saveConfigDescription}
+                  onChange={(e) => setSaveConfigDescription(e.target.value)}
+                  placeholder="Descripción de la configuración..."
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+                  rows={3}
+                  maxLength={200}
+                />
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowSaveDialog(false);
+                  setSaveConfigName('');
+                  setSaveConfigDescription('');
+                }}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveConfiguration}
+                disabled={!saveConfigName.trim()}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Modal para Cargar Configuración */}
+      {showLoadDialog && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-60">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-2xl mx-4 shadow-2xl max-h-[80vh] overflow-hidden">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Cargar Configuración</h3>
+            
+            {savedConfigurations.length === 0 ? (
+              <div className="text-center py-8">
+                <FolderOpen className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                <p className="text-gray-600">No hay configuraciones guardadas</p>
+                <p className="text-sm text-gray-500 mt-1">Guarda tu primera configuración para verla aquí</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {savedConfigurations
+                  .sort((a, b) => new Date(b.lastUsed || b.createdAt).getTime() - new Date(a.lastUsed || a.createdAt).getTime())
+                  .map((savedConfig) => (
+                  <div key={savedConfig.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h4 className="font-medium text-gray-900">{savedConfig.name}</h4>
+                        {savedConfig.description && (
+                          <p className="text-sm text-gray-600 mt-1">{savedConfig.description}</p>
+                        )}
+                        <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                          <span>Campos: {savedConfig.config.fields.length}</span>
+                          <span>Formato: {EXPORT_FORMATS[savedConfig.config.format].label}</span>
+                          <span>Creado: {new Date(savedConfig.createdAt).toLocaleDateString()}</span>
+                          {savedConfig.lastUsed && (
+                            <span>Usado: {new Date(savedConfig.lastUsed).toLocaleDateString()}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2 ml-4">
+                        <button
+                          onClick={() => handleLoadConfiguration(savedConfig)}
+                          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
+                        >
+                          Cargar
+                        </button>
+                        <button
+                          onClick={() => handleDeleteConfiguration(savedConfig.id)}
+                          className="p-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                          title="Eliminar configuración"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => setShowLoadDialog(false)}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

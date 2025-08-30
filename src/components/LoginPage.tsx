@@ -201,14 +201,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onError }) => {
             </button>
           </form>
 
-          {/* Demo Credentials */}
-          <div className="mt-6 p-4 bg-blue-50/70 rounded-xl border border-blue-200/50">
-            <h3 className="text-sm font-medium text-blue-900 mb-2">Credenciales de Demo:</h3>
-            <div className="text-xs text-blue-700 space-y-1">
-              <div><strong>Admin:</strong> admin / admin123</div>
-              <div><strong>Owner:</strong> gabriel / gabriel123</div>
-            </div>
-          </div>
+
         </div>
 
         {/* Footer */}

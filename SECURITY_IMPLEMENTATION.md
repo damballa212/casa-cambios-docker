@@ -28,9 +28,8 @@ Se han implementado las mejoras de seguridad prioritarias siguiendo el roadmap e
 ## 🔑 Sistema de Autenticación
 
 ### **Credenciales de Demo**
-```
-Admin:  admin / admin123
-Owner:  gabriel / gabriel123
+
+**NOTA DE SEGURIDAD**: Las credenciales de acceso deben ser proporcionadas por el administrador del sistema. No se incluyen credenciales por defecto por motivos de seguridad.
 ```
 
 **✅ Contraseñas actualizadas y verificadas**
