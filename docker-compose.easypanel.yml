@@ -46,6 +46,10 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-    # EasyPanel usa Traefik automáticamente - NO necesitas labels especiales
-    # Solo configura el dominio en la interfaz de EasyPanel
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.cani-pos-dashboard.rule=Host(`cani-pos-dashboard.lsoqoe.easypanel.host`)"
+      - "traefik.http.routers.cani-pos-dashboard.entrypoints=web"
+      - "traefik.http.services.cani-pos-dashboard.loadbalancer.server.port=80"
+      - "traefik.docker.network=easypanel"
     # El proxy port debe ser 80 (puerto interno del contenedor Nginx)
