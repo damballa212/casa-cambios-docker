@@ -6,19 +6,19 @@ Configura estas variables de entorno en tu aplicación de EasyPanel:
 
 ### 🗄️ Supabase Configuration
 ```
-SUPABASE_URL=https://tu-proyecto.supabase.co
-SUPABASE_ANON_KEY=tu_anon_key_aqui
-SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key_aqui
+SUPABASE_URL=https://ixvefxnycehbvipxcngv.supabase.co
+SUPABASE_ANON_KEY=sb_publishable_xWAJV_hw2RB1e1TfpMUEA_zwgPguLY
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4dmVmeG55Y2VoYnZpcHhjbmd2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NTg4MDUzNCwiZXhwIjoyMDcxNDU2NTM0fQ.J1l8f7EvE1LqqEsNsbd_IVs4tzpeCWJq5jwRgpH7NDw
 ```
 
 ### 🐘 PostgreSQL Configuration
 ```
-DATABASE_URL=postgresql://postgres.tu-proyecto:tu_password@aws-region.pooler.supabase.com:5432/postgres?sslmode=require
-DB_HOST=aws-region.pooler.supabase.com
+DATABASE_URL=postgresql://postgres.ixvefxnycehbvipxcngv:marlon212@aws-1-us-east-2.pooler.supabase.com:5432/postgres?sslmode=require
+DB_HOST=aws-1-us-east-2.pooler.supabase.com
 DB_PORT=5432
 DB_NAME=postgres
-DB_USER=postgres.tu-proyecto
-DB_PASSWORD=tu_password_aqui
+DB_USER=postgres.ixvefxnycehbvipxcngv
+DB_PASSWORD=marlon212
 ```
 
 ### 🔐 JWT Configuration
