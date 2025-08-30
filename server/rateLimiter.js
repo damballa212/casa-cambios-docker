@@ -6,15 +6,20 @@ import Redis from 'ioredis';
 let redisClient = null;
 
 try {
-  redisClient = new Redis({
-    host: process.env.REDIS_HOST || 'localhost',
-    port: process.env.REDIS_PORT || 6379,
-    password: process.env.REDIS_PASSWORD || undefined,
-    retryDelayOnFailover: 100,
-    enableReadyCheck: false,
-    maxRetriesPerRequest: null,
-    lazyConnect: true
-  });
+  // Usar REDIS_URL si está disponible, sino usar host/port individuales
+  const redisConfig = process.env.REDIS_URL ? 
+    process.env.REDIS_URL : 
+    {
+      host: process.env.REDIS_HOST || 'localhost',
+      port: process.env.REDIS_PORT || 6379,
+      password: process.env.REDIS_PASSWORD || undefined,
+      retryDelayOnFailover: 100,
+      enableReadyCheck: false,
+      maxRetriesPerRequest: null,
+      lazyConnect: true
+    };
+  
+  redisClient = new Redis(redisConfig);
 
   redisClient.on('connect', () => {
     console.log('✅ Conectado a Redis para rate limiting');
