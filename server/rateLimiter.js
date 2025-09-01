@@ -37,7 +37,7 @@ try {
 // Rate limiter general para API
 export const apiRateLimiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60000, // 1 minuto
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 1000, // 1000 requests por minuto (más permisivo)
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 2000, // 2000 requests por minuto (más permisivo)
   message: {
     error: 'Demasiadas solicitudes desde esta IP',
     code: 'RATE_LIMIT_EXCEEDED',
@@ -105,12 +105,12 @@ export const webhookRateLimiter = rateLimit({
 
 // Rate limiter para operaciones sensibles (actualizar tasas, etc.)
 export const sensitiveOperationsRateLimiter = rateLimit({
-  windowMs: 5 * 60 * 1000, // 5 minutos
-  max: 10, // 10 operaciones cada 5 minutos
+  windowMs: 2 * 60 * 1000, // 2 minutos (reducido de 5)
+  max: 50, // 50 operaciones cada 2 minutos (aumentado de 10)
   message: {
     error: 'Demasiadas operaciones sensibles',
     code: 'SENSITIVE_RATE_LIMIT_EXCEEDED',
-    retryAfter: '5 minutos'
+    retryAfter: '2 minutos'
   },
   standardHeaders: true,
   legacyHeaders: false,
