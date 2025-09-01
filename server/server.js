@@ -3149,13 +3149,110 @@ app.post('/api/database/format', authenticateToken, requireRole(['admin', 'owner
     console.log('🛡️ Creando backup automático antes del formateo...');
     let backupResult = null;
     try {
-      const { createBackup } = await import('./backup-system.js');
-      backupResult = await createBackup(
-        'pre-format', 
-        `Backup automático antes de formateo por ${req.user?.username || 'unknown'}`,
-        req.user?.username || 'unknown'
-      );
+      // Crear backup usando la instancia de Supabase del servidor principal
+      const backupId = `${new Date().toISOString().replace(/[:.]/g, '-')}_${Math.random().toString(36).substr(2, 8)}`;
+      const timestamp = new Date().toISOString();
+      
+      // Exportar datos de todas las tablas
+      const tables = ['global_rate', 'collaborators', 'clients', 'transactions'];
+      const backupData = {
+        id: backupId,
+        timestamp,
+        type: 'pre-format',
+        description: `Backup automático antes de formateo por ${req.user?.username || 'unknown'}`,
+        userId: req.user?.username || 'unknown',
+        version: '1.0',
+        tables: {},
+        metadata: {
+          totalRecords: 0,
+          totalSize: 0,
+          compressionUsed: true
+        }
+      };
+      
+      for (const tableName of tables) {
+        console.log(`📊 Exportando tabla: ${tableName}`);
+        const { data, error } = await supabase
+          .from(tableName)
+          .select('*')
+          .order('id', { ascending: true });
+        
+        if (error) {
+          console.error(`❌ Error exportando ${tableName}:`, error.message);
+          backupData.tables[tableName] = {
+            data: [],
+            count: 0,
+            exported_at: timestamp,
+            error: error.message
+          };
+        } else {
+          backupData.tables[tableName] = {
+            data: data || [],
+            count: (data || []).length,
+            exported_at: timestamp
+          };
+          backupData.metadata.totalRecords += (data || []).length;
+          console.log(`✅ ${tableName}: ${(data || []).length} registros exportados`);
+        }
+      }
+      
+      // Guardar backup en archivo
+      const fs = await import('fs');
+      const path = await import('path');
+      const { fileURLToPath } = await import('url');
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = path.dirname(__filename);
+      
+      const backupDir = path.join(__dirname, '../backups');
+      if (!fs.existsSync(backupDir)) {
+        fs.mkdirSync(backupDir, { recursive: true });
+      }
+      
+      const backupFilePath = path.join(backupDir, `backup_${backupId}.json`);
+      const backupContent = JSON.stringify(backupData, null, 2);
+      
+      fs.writeFileSync(backupFilePath, backupContent);
+      backupData.metadata.totalSize = Buffer.byteLength(backupContent, 'utf8');
+      
+      // Registrar backup en la tabla de backups
+      const { error: insertError } = await supabase
+        .from('database_backups')
+        .insert({
+          backup_id: backupData.id,
+          type: backupData.type,
+          description: backupData.description,
+          user_id: backupData.userId,
+          file_path: `backup_${backupData.id}.json`,
+          total_records: backupData.metadata.totalRecords,
+          file_size: backupData.metadata.totalSize,
+          tables_included: Object.keys(backupData.tables),
+          created_at: backupData.timestamp,
+          status: 'completed'
+        });
+      
+      if (insertError) {
+        console.error('❌ Error registrando backup en BD:', insertError);
+        // Eliminar archivo si no se pudo registrar en BD
+        try {
+          fs.unlinkSync(backupFilePath);
+        } catch (unlinkError) {
+          console.error('❌ Error eliminando archivo de backup fallido:', unlinkError);
+        }
+        throw new Error(`Error registrando backup en base de datos: ${insertError.message}`);
+      }
+      
+      backupResult = {
+        success: true,
+        backupId: backupData.id,
+        filePath: backupFilePath,
+        metadata: backupData.metadata,
+        timestamp: backupData.timestamp
+      };
+      
       console.log(`✅ Backup creado exitosamente: ${backupResult.backupId}`);
+      console.log(`📁 Archivo: ${backupResult.filePath}`);
+      console.log(`📊 Registros totales: ${backupResult.metadata.totalRecords}`);
+      
     } catch (backupError) {
       console.error('❌ Error creando backup:', backupError);
       return res.status(500).json({
