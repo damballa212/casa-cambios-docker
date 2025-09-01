@@ -18,6 +18,7 @@ import AddTransactionModal from './AddTransactionModal';
 import DeleteTransactionModal from './DeleteTransactionModal';
 import { useNotifications } from './NotificationSystem';
 import jsPDF from 'jspdf';
+import * as ExcelJS from 'exceljs';
 
 interface Transaction {
   id: string;
@@ -350,8 +351,17 @@ const TransactionsList: React.FC = () => {
           break;
           
         case 'excel':
-          const excelContent = generateExcel(dataToExport, config);
-          downloadFile(excelContent, `${baseFilename}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+          generateExcel(dataToExport, config).then(excelBuffer => {
+             const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+             downloadFile(blob, `${baseFilename}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+           }).catch(error => {
+             console.error('Error generando Excel:', error);
+             addNotification({
+               type: 'error',
+               title: 'Error de Exportación',
+               message: 'No se pudo generar el archivo Excel'
+             });
+           });
           break;
           
         case 'json':
@@ -413,32 +423,192 @@ const TransactionsList: React.FC = () => {
     return csvContent;
   };
 
-  // Generar Excel (simulado como CSV con diferentes headers)
-  const generateExcel = (data: Transaction[], config: ExportConfig) => {
-    // Para una implementación real, usarías una librería como xlsx
-    // Por ahora, generamos un CSV que Excel puede abrir
+  // Generar Excel profesional con ExcelJS
+  const generateExcel = async (data: Transaction[], config: ExportConfig) => {
+    const workbook = new ExcelJS.Workbook();
+    
+    // Configurar propiedades del workbook
+    workbook.creator = 'Casa de Cambios Dashboard';
+    workbook.lastModifiedBy = 'Sistema';
+    workbook.created = new Date();
+    workbook.modified = new Date();
+    
+    const worksheet = workbook.addWorksheet('Transacciones', {
+      properties: { tabColor: { argb: 'FF4CAF50' } },
+      views: [{ showGridLines: true, zoomScale: 100 }]
+    });
+    
     const fieldMap = getFieldMap();
     const headers = config.fields.map(field => fieldMap[field as keyof typeof fieldMap] || field);
     
-    const rows = data.map(transaction => 
-      config.fields.map(field => {
-        const value = (transaction as any)[field];
-        return typeof value === 'string' && value.includes(',') ? `"${value}"` : value;
-      })
-    );
+    // Configurar columnas con anchos apropiados
+    const columnWidths: { [key: string]: number } = {
+      'id': 8,
+      'fecha': 18,
+      'cliente': 25,
+      'colaborador': 18,
+      'usdTotal': 15,
+      'comision': 12,
+      'usdNeto': 15,
+      'montoGs': 18,
+      'tasaUsada': 12,
+      'status': 12,
+      'chatId': 20,
+      'gananciaGabriel': 18,
+      'gananciaColaborador': 20
+    };
     
-    let content = '';
+    worksheet.columns = config.fields.map((field, index) => ({
+      key: field,
+      width: columnWidths[field] || 15
+    }));
+    
+    let currentRow = 1;
+    
+    // Agregar metadatos si está habilitado
     if (config.includeMetadata) {
-      content += `Reporte de Transacciones\n`;
-      content += `Generado: ${new Date().toLocaleString()}\n`;
-      content += `Total de registros: ${data.length}\n\n`;
+      // Título principal
+      worksheet.mergeCells('A1:' + String.fromCharCode(65 + config.fields.length - 1) + '1');
+      const titleCell = worksheet.getCell('A1');
+      titleCell.value = 'CASA DE CAMBIOS - REPORTE DE TRANSACCIONES';
+      titleCell.style = {
+        font: { name: 'Calibri', size: 16, bold: true, color: { argb: 'FF2E7D32' } },
+        alignment: { horizontal: 'center', vertical: 'middle' },
+        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F5E8' } },
+        border: {
+          top: { style: 'thin', color: { argb: 'FF4CAF50' } },
+          left: { style: 'thin', color: { argb: 'FF4CAF50' } },
+          bottom: { style: 'thin', color: { argb: 'FF4CAF50' } },
+          right: { style: 'thin', color: { argb: 'FF4CAF50' } }
+        }
+      };
+      worksheet.getRow(1).height = 30;
+      currentRow = 3;
+      
+      // Información del reporte
+      const infoData = [
+        ['Generado:', new Date().toLocaleString('es-ES')],
+        ['Total de registros:', data.length],
+        ['Período:', `${data.length > 0 ? new Date(data[data.length - 1].fecha).toLocaleDateString('es-ES') : 'N/A'} - ${data.length > 0 ? new Date(data[0].fecha).toLocaleDateString('es-ES') : 'N/A'}`]
+      ];
+      
+      infoData.forEach((info, index) => {
+        const row = worksheet.getRow(currentRow + index);
+        row.getCell(1).value = info[0];
+        row.getCell(2).value = info[1];
+        row.getCell(1).style = {
+          font: { bold: true, color: { argb: 'FF424242' } },
+          alignment: { horizontal: 'right' }
+        };
+        row.getCell(2).style = {
+          font: { color: { argb: 'FF424242' } },
+          alignment: { horizontal: 'left' }
+        };
+      });
+      
+      currentRow += infoData.length + 2;
     }
     
-    content += [headers, ...rows]
-      .map(row => row.join(','))
-      .join('\n');
+    // Agregar encabezados
+    const headerRow = worksheet.getRow(currentRow);
+    headers.forEach((header, index) => {
+      const cell = headerRow.getCell(index + 1);
+      cell.value = header;
+      cell.style = {
+        font: { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } },
+        alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
+        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4CAF50' } },
+        border: {
+          top: { style: 'thin', color: { argb: 'FF2E7D32' } },
+          left: { style: 'thin', color: { argb: 'FF2E7D32' } },
+          bottom: { style: 'thin', color: { argb: 'FF2E7D32' } },
+          right: { style: 'thin', color: { argb: 'FF2E7D32' } }
+        }
+      };
+    });
+    headerRow.height = 25;
+    currentRow++;
     
-    return content;
+    // Agregar datos
+    data.forEach((transaction, rowIndex) => {
+      const row = worksheet.getRow(currentRow + rowIndex);
+      
+      config.fields.forEach((field, colIndex) => {
+        const cell = row.getCell(colIndex + 1);
+        let value = (transaction as any)[field];
+        
+        // Formatear valores según el tipo
+        if (field === 'fecha') {
+          value = new Date(value).toLocaleDateString('es-ES');
+        } else if (['usdTotal', 'usdNeto', 'gananciaGabriel', 'gananciaColaborador'].includes(field)) {
+          value = Number(value || 0);
+          cell.numFmt = '$#,##0.00';
+        } else if (field === 'comision') {
+          value = Number(value || 0);
+          cell.numFmt = '0.00%';
+        } else if (field === 'montoGs') {
+          value = Number(value || 0);
+          cell.numFmt = '#,##0';
+        } else if (field === 'tasaUsada') {
+          value = Number(value || 0);
+          cell.numFmt = '#,##0.00';
+        }
+        
+        cell.value = value;
+        
+        // Estilo de celda
+        const isEvenRow = rowIndex % 2 === 0;
+        cell.style = {
+          font: { name: 'Calibri', size: 10, color: { argb: 'FF424242' } },
+          alignment: { 
+            horizontal: ['usdTotal', 'usdNeto', 'comision', 'montoGs', 'tasaUsada', 'gananciaGabriel', 'gananciaColaborador'].includes(field) ? 'right' : 'left',
+            vertical: 'middle'
+          },
+          fill: { 
+            type: 'pattern', 
+            pattern: 'solid', 
+            fgColor: { argb: isEvenRow ? 'FFFAFAFA' : 'FFFFFFFF' }
+          },
+          border: {
+            top: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+            left: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+            bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+            right: { style: 'thin', color: { argb: 'FFE0E0E0' } }
+          }
+        };
+        
+        // Colores especiales para ciertos campos
+        if (field === 'status') {
+          const statusColors: { [key: string]: string } = {
+            'completed': 'FF4CAF50',
+            'processing': 'FFFF9800',
+            'error': 'FFF44336'
+          };
+          if (statusColors[value]) {
+            cell.style.font = { ...cell.style.font, color: { argb: statusColors[value] }, bold: true };
+          }
+        }
+      });
+      
+      row.height = 20;
+    });
+    
+    // Agregar filtros automáticos
+    const dataRange = `A${config.includeMetadata ? currentRow - 1 : 1}:${String.fromCharCode(65 + config.fields.length - 1)}${currentRow + data.length - 1}`;
+    worksheet.autoFilter = dataRange;
+    
+    // Congelar paneles
+    worksheet.views = [{
+      state: 'frozen',
+      xSplit: 0,
+      ySplit: config.includeMetadata ? currentRow - 1 : 1,
+      topLeftCell: `A${config.includeMetadata ? currentRow : 2}`,
+      activeCell: 'A1'
+    }];
+    
+    // Generar buffer
+    const buffer = await workbook.xlsx.writeBuffer();
+    return buffer;
   };
 
   // Generar JSON

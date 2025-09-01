@@ -12,6 +12,7 @@
     "start": "npm run build && npm run preview"
   },
   "dependencies": {
+    "exceljs": "^4.4.0",
     "jspdf": "^3.0.1",
     "lucide-react": "^0.446.0",
     "react": "^18.3.1",
