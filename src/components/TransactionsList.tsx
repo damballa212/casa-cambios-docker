@@ -407,7 +407,11 @@ const TransactionsList: React.FC = () => {
   // Generar CSV
   const generateCSV = (data: Transaction[], config: ExportConfig) => {
     const fieldMap = getFieldMap();
-    const headers = config.fields.map(field => fieldMap[field as keyof typeof fieldMap] || field);
+    // Filtrar encabezados excluyendo campos de totales que van solo en pie de página
+    const tableFields = config.fields.filter(field => 
+      field !== 'gananciaGabrielTotal' && field !== 'gananciaColaboradorTotal'
+    );
+    const headers = tableFields.map(field => fieldMap[field as keyof typeof fieldMap] || field);
     
     const rows = data.map(transaction => 
       config.fields.map(field => {
@@ -439,7 +443,12 @@ const TransactionsList: React.FC = () => {
     });
     
     const fieldMap = getFieldMap();
-    const headers = config.fields.map(field => fieldMap[field as keyof typeof fieldMap] || field);
+    
+    // Filtrar campos excluyendo totales que van solo en pie de página
+    const tableFields = config.fields.filter(field => 
+      field !== 'gananciaGabrielTotal' && field !== 'gananciaColaboradorTotal'
+    );
+    const headers = tableFields.map(field => fieldMap[field as keyof typeof fieldMap] || field);
     
     // Configurar columnas con anchos apropiados
     const columnWidths: { [key: string]: number } = {
@@ -458,7 +467,7 @@ const TransactionsList: React.FC = () => {
       'gananciaColaborador': 20
     };
     
-    worksheet.columns = config.fields.map((field) => ({
+    worksheet.columns = tableFields.map((field) => ({
       key: field,
       width: columnWidths[field] || 15
     }));
@@ -468,7 +477,7 @@ const TransactionsList: React.FC = () => {
     // Agregar metadatos si está habilitado
     if (config.includeMetadata) {
       // Título principal
-      worksheet.mergeCells('A1:' + String.fromCharCode(65 + config.fields.length - 1) + '1');
+      worksheet.mergeCells('A1:' + String.fromCharCode(65 + tableFields.length - 1) + '1');
       const titleCell = worksheet.getCell('A1');
       titleCell.value = 'CASA DE CAMBIOS - REPORTE DE TRANSACCIONES';
       titleCell.style = {
@@ -529,11 +538,12 @@ const TransactionsList: React.FC = () => {
     headerRow.height = 25;
     currentRow++;
     
-    // Agregar datos
+    // Agregar datos (excluyendo campos de totales que van solo en pie de página)
     data.forEach((transaction, rowIndex) => {
       const row = worksheet.getRow(currentRow + rowIndex);
       
-      config.fields.forEach((field, colIndex) => {
+      tableFields.forEach((field, colIndex) => {
+        
         const cell = row.getCell(colIndex + 1);
         let value = (transaction as any)[field];
         
@@ -607,71 +617,143 @@ const TransactionsList: React.FC = () => {
     );
     
     if (hasGananciaFields) {
-      // Línea separadora
-      const separatorRow = worksheet.getRow(footerStartRow);
-      for (let i = 1; i <= config.fields.length; i++) {
-        const cell = separatorRow.getCell(i);
-        cell.style = {
-          border: {
-            top: { style: 'medium', color: { argb: 'FF2E7D32' } }
-          }
-        };
-      }
-      
-      // Título "TOTALES"
-      const titleRow = worksheet.getRow(footerStartRow + 1);
-      const titleCell = titleRow.getCell(1);
-      titleCell.value = 'TOTALES';
-      titleCell.style = {
-        font: { name: 'Calibri', size: 12, bold: true, color: { argb: 'FF2E7D32' } },
-        alignment: { horizontal: 'left', vertical: 'middle' },
-        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F5E8' } }
-      };
-      
-      // Ganancia Gabriel Total
-      const gabrielRow = worksheet.getRow(footerStartRow + 2);
-      gabrielRow.getCell(1).value = 'Ganancia Gabriel Total:';
-      gabrielRow.getCell(1).style = {
-        font: { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF424242' } },
-        alignment: { horizontal: 'right', vertical: 'middle' }
-      };
-      
-      gabrielRow.getCell(2).value = totalGananciaGabriel;
-      gabrielRow.getCell(2).numFmt = '$#,##0.00';
-      gabrielRow.getCell(2).style = {
-        font: { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF2E7D32' } },
-        alignment: { horizontal: 'left', vertical: 'middle' },
-        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F5E8' } },
-        border: {
-          top: { style: 'thin', color: { argb: 'FF4CAF50' } },
-          left: { style: 'thin', color: { argb: 'FF4CAF50' } },
-          bottom: { style: 'thin', color: { argb: 'FF4CAF50' } },
-          right: { style: 'thin', color: { argb: 'FF4CAF50' } }
-        }
-      };
-      
-      // Ganancia Colaborador Total
-      const colaboradorRow = worksheet.getRow(footerStartRow + 3);
-      colaboradorRow.getCell(1).value = 'Ganancia Colaborador Total:';
-      colaboradorRow.getCell(1).style = {
-        font: { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF424242' } },
-        alignment: { horizontal: 'right', vertical: 'middle' }
-      };
-      
-      colaboradorRow.getCell(2).value = totalGananciaColaborador;
-      colaboradorRow.getCell(2).numFmt = '$#,##0.00';
-      colaboradorRow.getCell(2).style = {
-        font: { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF2E7D32' } },
-        alignment: { horizontal: 'left', vertical: 'middle' },
-        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F5E8' } },
-        border: {
-          top: { style: 'thin', color: { argb: 'FF4CAF50' } },
-          left: { style: 'thin', color: { argb: 'FF4CAF50' } },
-          bottom: { style: 'thin', color: { argb: 'FF4CAF50' } },
-          right: { style: 'thin', color: { argb: 'FF4CAF50' } }
-        }
-      };
-    }
+       // Espacio antes del pie de tabla
+       const spaceRow = worksheet.getRow(footerStartRow);
+       spaceRow.height = 15;
+       
+       // Línea separadora elegante con doble borde
+       const separatorRow = worksheet.getRow(footerStartRow + 1);
+       const tableWidth = config.fields.filter(f => f !== 'gananciaGabrielTotal' && f !== 'gananciaColaboradorTotal').length;
+       for (let i = 1; i <= tableWidth; i++) {
+         const cell = separatorRow.getCell(i);
+         cell.style = {
+           border: {
+             top: { style: 'double', color: { argb: 'FF1B5E20' } }
+           }
+         };
+       }
+       
+       // Sección de totales con diseño moderno
+       const footerBgColor = 'FF263238'; // Gris oscuro elegante
+       const footerTextColor = 'FFFFFFFF'; // Blanco
+       const accentColor = 'FF4CAF50'; // Verde corporativo
+       
+       // Título principal del pie de tabla
+       const titleRow = worksheet.getRow(footerStartRow + 2);
+       worksheet.mergeCells(`A${footerStartRow + 2}:${String.fromCharCode(65 + tableWidth - 1)}${footerStartRow + 2}`);
+       const titleCell = titleRow.getCell(1);
+       titleCell.value = '📊 RESUMEN FINANCIERO';
+       titleCell.style = {
+         font: { name: 'Calibri', size: 14, bold: true, color: { argb: footerTextColor } },
+         alignment: { horizontal: 'center', vertical: 'middle' },
+         fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: footerBgColor } },
+         border: {
+           top: { style: 'medium', color: { argb: accentColor } },
+           left: { style: 'medium', color: { argb: accentColor } },
+           right: { style: 'medium', color: { argb: accentColor } },
+           bottom: { style: 'thin', color: { argb: accentColor } }
+         }
+       };
+       titleRow.height = 35;
+       
+       // Contenedor de totales con diseño en cards
+       const totalsStartRow = footerStartRow + 3;
+       
+       // Card 1: Ganancia Gabriel Total
+       const gabrielCardRow = worksheet.getRow(totalsStartRow);
+       const gabrielLabelCells = Math.ceil(tableWidth * 0.6);
+       const gabrielValueCells = tableWidth - gabrielLabelCells;
+       
+       // Merge cells para la etiqueta de Gabriel
+       worksheet.mergeCells(`A${totalsStartRow}:${String.fromCharCode(65 + gabrielLabelCells - 1)}${totalsStartRow}`);
+       const gabrielLabelCell = gabrielCardRow.getCell(1);
+       gabrielLabelCell.value = '💰 GANANCIA GABRIEL TOTAL';
+       gabrielLabelCell.style = {
+         font: { name: 'Calibri', size: 12, bold: true, color: { argb: footerTextColor } },
+         alignment: { horizontal: 'right', vertical: 'middle', indent: 1 },
+         fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF37474F' } },
+         border: {
+           top: { style: 'thin', color: { argb: accentColor } },
+           left: { style: 'medium', color: { argb: accentColor } },
+           bottom: { style: 'thin', color: { argb: accentColor } },
+           right: { style: 'thin', color: { argb: accentColor } }
+         }
+       };
+       
+       // Merge cells para el valor de Gabriel
+       worksheet.mergeCells(`${String.fromCharCode(65 + gabrielLabelCells)}${totalsStartRow}:${String.fromCharCode(65 + tableWidth - 1)}${totalsStartRow}`);
+       const gabrielValueCell = gabrielCardRow.getCell(gabrielLabelCells + 1);
+       gabrielValueCell.value = totalGananciaGabriel;
+       gabrielValueCell.numFmt = '$#,##0.00';
+       gabrielValueCell.style = {
+         font: { name: 'Calibri', size: 14, bold: true, color: { argb: accentColor } },
+         alignment: { horizontal: 'center', vertical: 'middle' },
+         fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B5E20' } },
+         border: {
+           top: { style: 'thin', color: { argb: accentColor } },
+           right: { style: 'medium', color: { argb: accentColor } },
+           bottom: { style: 'thin', color: { argb: accentColor } },
+           left: { style: 'thin', color: { argb: accentColor } }
+         }
+       };
+       gabrielCardRow.height = 30;
+       
+       // Card 2: Ganancia Colaborador Total
+       const colaboradorCardRow = worksheet.getRow(totalsStartRow + 1);
+       
+       // Merge cells para la etiqueta de Colaborador
+       worksheet.mergeCells(`A${totalsStartRow + 1}:${String.fromCharCode(65 + gabrielLabelCells - 1)}${totalsStartRow + 1}`);
+       const colaboradorLabelCell = colaboradorCardRow.getCell(1);
+       colaboradorLabelCell.value = '🤝 GANANCIA COLABORADOR TOTAL';
+       colaboradorLabelCell.style = {
+         font: { name: 'Calibri', size: 12, bold: true, color: { argb: footerTextColor } },
+         alignment: { horizontal: 'right', vertical: 'middle', indent: 1 },
+         fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF37474F' } },
+         border: {
+           top: { style: 'thin', color: { argb: accentColor } },
+           left: { style: 'medium', color: { argb: accentColor } },
+           bottom: { style: 'medium', color: { argb: accentColor } },
+           right: { style: 'thin', color: { argb: accentColor } }
+         }
+       };
+       
+       // Merge cells para el valor de Colaborador
+       worksheet.mergeCells(`${String.fromCharCode(65 + gabrielLabelCells)}${totalsStartRow + 1}:${String.fromCharCode(65 + tableWidth - 1)}${totalsStartRow + 1}`);
+       const colaboradorValueCell = colaboradorCardRow.getCell(gabrielLabelCells + 1);
+       colaboradorValueCell.value = totalGananciaColaborador;
+       colaboradorValueCell.numFmt = '$#,##0.00';
+       colaboradorValueCell.style = {
+         font: { name: 'Calibri', size: 14, bold: true, color: { argb: accentColor } },
+         alignment: { horizontal: 'center', vertical: 'middle' },
+         fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B5E20' } },
+         border: {
+           top: { style: 'thin', color: { argb: accentColor } },
+           right: { style: 'medium', color: { argb: accentColor } },
+           bottom: { style: 'medium', color: { argb: accentColor } },
+           left: { style: 'thin', color: { argb: accentColor } }
+         }
+       };
+       colaboradorCardRow.height = 30;
+       
+       // Total general (suma de ambos)
+       const totalGeneral = totalGananciaGabriel + totalGananciaColaborador;
+       const totalRow = worksheet.getRow(totalsStartRow + 2);
+       worksheet.mergeCells(`A${totalsStartRow + 2}:${String.fromCharCode(65 + tableWidth - 1)}${totalsStartRow + 2}`);
+       const totalCell = totalRow.getCell(1);
+       totalCell.value = `🏆 TOTAL GENERAL: ${totalGeneral.toLocaleString('es-ES', { style: 'currency', currency: 'USD' })}`;
+       totalCell.style = {
+         font: { name: 'Calibri', size: 13, bold: true, color: { argb: 'FFFFD700' } },
+         alignment: { horizontal: 'center', vertical: 'middle' },
+         fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0D47A1' } },
+         border: {
+           top: { style: 'medium', color: { argb: 'FFFFD700' } },
+           left: { style: 'medium', color: { argb: 'FFFFD700' } },
+           right: { style: 'medium', color: { argb: 'FFFFD700' } },
+           bottom: { style: 'medium', color: { argb: 'FFFFD700' } }
+         }
+       };
+       totalRow.height = 35;
+     }
     
     // Agregar filtros automáticos
     const dataRange = `A${config.includeMetadata ? currentRow - 1 : 1}:${String.fromCharCode(65 + config.fields.length - 1)}${currentRow + data.length - 1}`;
