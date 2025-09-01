@@ -662,7 +662,6 @@ const TransactionsList: React.FC = () => {
        // Card 1: Ganancia Gabriel Total
        const gabrielCardRow = worksheet.getRow(totalsStartRow);
        const gabrielLabelCells = Math.ceil(tableWidth * 0.6);
-       const gabrielValueCells = tableWidth - gabrielLabelCells;
        
        // Merge cells para la etiqueta de Gabriel
        worksheet.mergeCells(`A${totalsStartRow}:${String.fromCharCode(65 + gabrielLabelCells - 1)}${totalsStartRow}`);
