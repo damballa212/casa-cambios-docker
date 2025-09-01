@@ -32,6 +32,8 @@ interface Transaction {
   status: string;
   chatId: string;
   idempotencyKey: string;
+  montoColaboradorUsd?: number;
+  montoComisionGabrielUsd?: number;
   gananciaGabriel?: number; // Ganancia específica de Gabriel
   gananciaColaborador?: number; // Ganancia específica del colaborador
 }
@@ -138,22 +140,12 @@ const TransactionsList: React.FC = () => {
       try {
         setLoading(true);
         const data = await apiService.getTransactions();
-        // Calcular ganancias para cada transacción
+        // Usar ganancias reales de la base de datos
         const transactionsWithGanancia = data.map((transaction: Transaction) => {
-          // Comisión total = usdTotal * (comision / 100)
-          const comisionTotal = transaction.usdTotal * (transaction.comision / 100);
-          
-          // Calcular ganancia del colaborador (por ejemplo, 30% de la comisión)
-          const porcentajeColaborador = 0.30; // 30% para el colaborador
-          const gananciaColaborador = comisionTotal * porcentajeColaborador;
-          
-          // Gabriel gana el resto de la comisión
-          const gananciaGabriel = comisionTotal - gananciaColaborador;
-          
           return {
             ...transaction,
-            gananciaGabriel: gananciaGabriel,
-            gananciaColaborador: gananciaColaborador
+            gananciaGabriel: transaction.montoComisionGabrielUsd || 0,
+            gananciaColaborador: transaction.montoColaboradorUsd || 0
           };
         });
         setTransactions(transactionsWithGanancia);

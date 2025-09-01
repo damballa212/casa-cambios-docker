@@ -19,6 +19,8 @@ export interface Transaction {
   status: 'completed' | 'processing' | 'error';
   chatId: string;
   idempotencyKey: string;
+  montoColaboradorUsd?: number;
+  montoComisionGabrielUsd?: number;
 }
 
 export interface CreateTransactionRequest {
