@@ -39,7 +39,7 @@ const SystemLogs: React.FC = () => {
     fetchLogs();
     
     // Auto-refresh cada 30 segundos si está habilitado
-    let interval: number;
+    let interval: NodeJS.Timeout | undefined;
     if (autoRefresh) {
       interval = setInterval(fetchLogs, 30000);
     }

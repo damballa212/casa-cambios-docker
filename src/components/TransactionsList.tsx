@@ -458,7 +458,7 @@ const TransactionsList: React.FC = () => {
       'gananciaColaborador': 20
     };
     
-    worksheet.columns = config.fields.map((field, index) => ({
+    worksheet.columns = config.fields.map((field) => ({
       key: field,
       width: columnWidths[field] || 15
     }));
