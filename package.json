@@ -1,17 +1,19 @@
 {
-  "name": "vite-react-typescript-starter",
+  "name": "casa-cambios-dashboard",
   "private": true,
-  "version": "0.0.0",
+  "version": "2.1.0",
   "type": "module",
+  "description": "Sistema profesional de gestión de transacciones para Casa de Cambios con debugging avanzado y diseño moderno",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "npm run build && npm run preview"
   },
   "dependencies": {
     "jspdf": "^3.0.1",
-    "lucide-react": "^0.344.0",
+    "lucide-react": "^0.446.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
