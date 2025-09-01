@@ -1829,11 +1829,11 @@ app.post('/api/transactions', authenticateToken, requireRole(['admin', 'owner'])
       montoGabrielUsd = comisionUsd;
       montoGabrielGs = comisionGs;
     } else {
-      // El porcentaje del colaborador es sobre la comisión total, no sobre el monto total USD
+      // El porcentaje del colaborador es sobre el monto total USD, no sobre la comisión
       const collaboratorPct = colaboradorPct ?? collaboratorData?.base_pct_usd_total ?? 50;
       
-      // Ganancia del colaborador: su % de la comisión total
-      montoColaboradorUsd = (comisionUsd * collaboratorPct) / 100;
+      // Ganancia del colaborador: su % del monto total USD
+      montoColaboradorUsd = (usdTotal * collaboratorPct) / 100;
       montoColaboradorGs = Math.round(montoColaboradorUsd * tasaUsada);
       
       // Ganancia de Gabriel: comisión total menos la ganancia del colaborador
