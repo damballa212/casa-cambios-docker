@@ -67,6 +67,9 @@ export class BackupSystem {
     try {
       console.log('🚀 Iniciando creación de backup...');
       
+      // Asegurar que el directorio de backups existe
+      this.ensureBackupDirectory();
+      
       const backupId = this.generateBackupId();
       const timestamp = new Date().toISOString();
       
@@ -88,15 +91,26 @@ export class BackupSystem {
       // Exportar cada tabla
       for (const tableName of MAIN_TABLES) {
         console.log(`📊 Exportando tabla: ${tableName}`);
-        const tableData = await this.exportTable(tableName);
-        
-        if (tableData) {
+        try {
+          const tableData = await this.exportTable(tableName);
+          
+          if (tableData) {
+            backupData.tables[tableName] = {
+              data: tableData,
+              count: tableData.length,
+              exported_at: timestamp
+            };
+            backupData.metadata.totalRecords += tableData.length;
+          }
+        } catch (tableError) {
+          console.error(`❌ Error exportando tabla ${tableName}:`, tableError);
+          // Continuar con las otras tablas
           backupData.tables[tableName] = {
-            data: tableData,
-            count: tableData.length,
-            exported_at: timestamp
+            data: [],
+            count: 0,
+            exported_at: timestamp,
+            error: tableError.message
           };
-          backupData.metadata.totalRecords += tableData.length;
         }
       }
 
@@ -104,11 +118,29 @@ export class BackupSystem {
       const backupFilePath = path.join(BACKUP_CONFIG.backupDir, `backup_${backupId}.json`);
       const backupContent = JSON.stringify(backupData, null, 2);
       
-      fs.writeFileSync(backupFilePath, backupContent);
-      backupData.metadata.totalSize = Buffer.byteLength(backupContent, 'utf8');
+      try {
+        fs.writeFileSync(backupFilePath, backupContent);
+        backupData.metadata.totalSize = Buffer.byteLength(backupContent, 'utf8');
+        console.log(`✅ Archivo de backup guardado: ${backupFilePath}`);
+      } catch (fileError) {
+        console.error('❌ Error guardando archivo de backup:', fileError);
+        throw new Error(`Error guardando archivo de backup: ${fileError.message}`);
+      }
       
       // Registrar backup en la tabla de backups
-      await this.registerBackup(backupData);
+      try {
+        await this.registerBackup(backupData);
+        console.log('✅ Backup registrado en base de datos');
+      } catch (dbError) {
+        console.error('❌ Error registrando backup en BD:', dbError);
+        // Eliminar archivo si no se pudo registrar en BD
+        try {
+          fs.unlinkSync(backupFilePath);
+        } catch (unlinkError) {
+          console.error('❌ Error eliminando archivo de backup fallido:', unlinkError);
+        }
+        throw new Error(`Error registrando backup en base de datos: ${dbError.message}`);
+      }
       
       console.log(`✅ Backup creado exitosamente: ${backupId}`);
       console.log(`📁 Archivo: ${backupFilePath}`);
