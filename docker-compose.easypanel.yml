@@ -50,7 +50,7 @@ services:
       start_period: 40s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.cani-pos-dashboard.rule=Host(`cani-pos-dashboard.lsoqoe.easypanel.host`)"
+      - "traefik.http.routers.cani-pos-dashboard.rule=Host(`dashboard.n8nhub.shop`)"
       - "traefik.http.routers.cani-pos-dashboard.entrypoints=web"
       - "traefik.http.services.cani-pos-dashboard.loadbalancer.server.port=80"
       - "traefik.docker.network=easypanel"

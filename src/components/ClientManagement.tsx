@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Plus, Edit, TrendingUp, DollarSign, Phone, Mail, Calendar, Search, Filter, Eye, X, Save } from 'lucide-react';
+import { apiService } from '../services/api';
 
 interface Client {
   id: number;
@@ -20,61 +21,27 @@ const ClientManagement: React.FC = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [editForm, setEditForm] = useState({ name: '', phone: '', status: 'active', notes: '' });
+  const [addForm, setAddForm] = useState({ name: '', phone: '', email: '', notes: '' });
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Cargar clientes desde el API
   useEffect(() => {
     const fetchClients = async () => {
       try {
+        console.log('🔍 Frontend: Iniciando carga de clientes...');
         setLoading(true);
-        // Simular datos de clientes basados en transacciones
-        const response = await fetch('/api/transactions');
-        if (!response.ok) {
-          throw new Error('Error al cargar transacciones');
-        }
-        const transactions = await response.json();
-        
-        // Agrupar transacciones por cliente
-        const clientStats: { [key: string]: any } = {};
-        transactions.forEach((tx: any) => {
-          if (!clientStats[tx.cliente]) {
-            clientStats[tx.cliente] = {
-              name: tx.cliente,
-              phone: tx.chatId?.split('@')[0] || 'N/A',
-              chatId: tx.chatId,
-              transactions: [],
-              totalVolumeUsd: 0,
-              totalCommissions: 0
-            };
-          }
-          clientStats[tx.cliente].transactions.push(tx);
-          clientStats[tx.cliente].totalVolumeUsd += tx.usdTotal || 0;
-          clientStats[tx.cliente].totalCommissions += (tx.usdTotal * tx.comision / 100) || 0;
-        });
-        
-        // Convertir a array de clientes con datos reales
-        const clientsArray = Object.values(clientStats).map((client: any, index) => ({
-          id: index + 1,
-          name: client.name,
-          phone: client.phone,
-          email: undefined, // No generar emails falsos
-          totalTransactions: client.transactions.length,
-          totalVolumeUsd: client.totalVolumeUsd,
-          totalCommissions: client.totalCommissions,
-          averageTransaction: client.totalVolumeUsd / client.transactions.length,
-          lastTransactionDate: client.transactions[0]?.fecha || new Date().toISOString(),
-          status: 'active' as const,
-          notes: `WhatsApp: ${client.chatId}`
-        }));
-        
-        setClients(clientsArray);
+        const data = await apiService.getClients();
+        console.log('✅ Frontend: Datos recibidos:', data);
+        console.log('📊 Frontend: Número de clientes:', data?.length || 0);
+        setClients(data);
         setError(null);
       } catch (err) {
-        console.error('Error fetching clients:', err);
+        console.error('❌ Frontend: Error fetching clients:', err);
         setError('Error al cargar los clientes');
         setClients([]);
       } finally {
@@ -101,23 +68,21 @@ const ClientManagement: React.FC = () => {
     if (!editingClient) return;
     
     try {
-      // Aquí iría la lógica para actualizar el cliente en el backend
-      console.log('Guardando cambios:', {
-        id: editingClient.id,
-        ...editForm
-      });
+      setIsSubmitting(true);
+      
+      const updatedClient = {
+        ...editingClient,
+        name: editForm.name,
+        phone: editForm.phone,
+        status: editForm.status as 'active' | 'inactive',
+        notes: editForm.notes
+      };
+      
+      await apiService.updateClient(editingClient.id, updatedClient);
       
       // Actualizar el estado local
       setClients(prev => prev.map(client => 
-        client.id === editingClient.id 
-          ? { 
-              ...client, 
-              name: editForm.name,
-              phone: editForm.phone,
-              status: editForm.status as 'active' | 'inactive',
-              notes: editForm.notes
-            }
-          : client
+        client.id === editingClient.id ? updatedClient : client
       ));
       
       // Cerrar el modal
@@ -125,6 +90,9 @@ const ClientManagement: React.FC = () => {
       setEditForm({ name: '', phone: '', status: 'active', notes: '' });
     } catch (error) {
       console.error('Error al guardar cambios:', error);
+      alert('Error al guardar los cambios del cliente');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -132,6 +100,52 @@ const ClientManagement: React.FC = () => {
   const handleCancelEdit = () => {
     setEditingClient(null);
     setEditForm({ name: '', phone: '', status: 'active', notes: '' });
+  };
+
+  // Manejar agregar nuevo cliente
+  const handleAddClient = async () => {
+    if (!addForm.name.trim() || !addForm.phone.trim()) {
+      alert('Por favor completa el nombre y teléfono del cliente');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      
+      // Crear nuevo cliente
+      const newClientData = {
+        name: addForm.name.trim(),
+        phone: addForm.phone.trim(),
+        email: addForm.email.trim() || undefined,
+        notes: addForm.notes.trim() || undefined
+      };
+
+      const response = await apiService.createClient(newClientData);
+       
+       if (response.success) {
+         // Agregar al estado local
+         setClients(prev => [response.client, ...prev]);
+       } else {
+         throw new Error(response.message || 'Error al crear cliente');
+       }
+      
+      // Limpiar formulario y cerrar modal
+      setAddForm({ name: '', phone: '', email: '', notes: '' });
+      setShowAddForm(false);
+      
+      console.log('Cliente agregado:', response.client);
+    } catch (error) {
+      console.error('Error al agregar cliente:', error);
+      alert('Error al agregar el cliente');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Cancelar agregar cliente
+  const handleCancelAdd = () => {
+    setAddForm({ name: '', phone: '', email: '', notes: '' });
+    setShowAddForm(false);
   };
 
   // Filtrar clientes
@@ -334,6 +348,100 @@ const ClientManagement: React.FC = () => {
                 </p>
               </div>
               <TrendingUp className="w-8 h-8 text-orange-500" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Agregar Cliente */}
+      {showAddForm && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white/90 backdrop-blur-md rounded-2xl p-6 w-full max-w-md mx-4 border border-gray-200/50 shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-gray-900 flex items-center">
+                <Plus className="w-5 h-5 mr-2" />
+                Nuevo Cliente
+              </h3>
+              <button
+                onClick={handleCancelAdd}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100/50 rounded-lg transition-colors duration-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nombre del Cliente *
+                </label>
+                <input
+                  type="text"
+                  value={addForm.name}
+                  onChange={(e) => setAddForm(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/70"
+                  placeholder="Nombre completo del cliente"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Teléfono *
+                </label>
+                <input
+                  type="text"
+                  value={addForm.phone}
+                  onChange={(e) => setAddForm(prev => ({ ...prev, phone: e.target.value }))}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/70"
+                  placeholder="Número de teléfono"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email (opcional)
+                </label>
+                <input
+                  type="email"
+                  value={addForm.email}
+                  onChange={(e) => setAddForm(prev => ({ ...prev, email: e.target.value }))}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/70"
+                  placeholder="correo@ejemplo.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Notas (opcional)
+                </label>
+                <textarea
+                  value={addForm.notes}
+                  onChange={(e) => setAddForm(prev => ({ ...prev, notes: e.target.value }))}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/70"
+                  placeholder="Notas adicionales sobre el cliente..."
+                  rows={3}
+                />
+              </div>
+            </div>
+
+            <div className="flex space-x-3 mt-6">
+              <button
+                onClick={handleCancelAdd}
+                disabled={isSubmitting}
+                className="flex-1 px-4 py-3 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleAddClient}
+                disabled={isSubmitting || !addForm.name.trim() || !addForm.phone.trim()}
+                className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{isSubmitting ? 'Agregando...' : 'Agregar Cliente'}</span>
+              </button>
             </div>
           </div>
         </div>

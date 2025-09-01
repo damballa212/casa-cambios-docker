@@ -10,7 +10,9 @@ import {
   Clock,
   UserCheck,
   LogOut,
-  Shield
+  Shield,
+  Menu,
+  X
 } from 'lucide-react';
 import DashboardMetrics from './components/DashboardMetrics';
 import TransactionsList from './components/TransactionsList';
@@ -27,6 +29,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isLoading, setIsLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Estado de autenticación
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -136,6 +139,16 @@ function App() {
     // Verificar autenticación al cargar
     checkAuthStatus();
     
+    // Escuchar eventos de expiración de sesión
+    const handleSessionExpired = () => {
+      console.log('🔒 Sesión expirada - redirigiendo al login');
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      apiService.clearStoredToken();
+    };
+    
+    window.addEventListener('auth:session-expired', handleSessionExpired);
+    
     // Verificar conexión del backend independientemente de la autenticación
     const checkBackendConnection = async () => {
       try {
@@ -149,6 +162,10 @@ function App() {
     };
     
     checkBackendConnection();
+    
+    return () => {
+      window.removeEventListener('auth:session-expired', handleSessionExpired);
+    };
   }, []);
 
   useEffect(() => {
@@ -227,26 +244,34 @@ function App() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-md border-b border-gray-200/50 sticky top-0 z-50">
-        <div className="px-6 py-4">
+        <div className="px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between">
+            {/* Mobile menu button */}
             <div className="flex items-center space-x-4">
+              <button
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="lg:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              </button>
+              
               <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
-                  <DollarSign className="w-6 h-6 text-white" />
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
+                  <DollarSign className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-gray-900">Casa de Cambios</h1>
-                  <p className="text-sm text-gray-600">
+                  <h1 className="text-lg sm:text-2xl font-bold text-gray-900">Casa de Cambios</h1>
+                  <p className="hidden sm:block text-sm text-gray-600">
                     Panel de Control TikTok Producción {backendConnected ? '(Conectado a Supabase)' : '(Modo Offline)'}
                   </p>
                 </div>
               </div>
             </div>
             
-            <div className="flex items-center space-x-4">
-              {/* Información del usuario */}
+            <div className="flex items-center space-x-2 sm:space-x-4">
+              {/* Información del usuario - Responsive */}
               {currentUser && (
-                <div className="flex items-center space-x-3 px-3 py-2 bg-white/50 rounded-lg border border-gray-200/50">
+                <div className="hidden sm:flex items-center space-x-3 px-3 py-2 bg-white/50 rounded-lg border border-gray-200/50">
                   <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-green-600 rounded-full flex items-center justify-center">
                     <Shield className="w-4 h-4 text-white" />
                   </div>
@@ -257,56 +282,67 @@ function App() {
                 </div>
               )}
               
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
+              {/* Último update - Solo desktop */}
+              <div className="hidden xl:flex items-center space-x-2 text-sm text-gray-600">
                 <Clock className="w-4 h-4" />
                 <span>Último update: {lastUpdate.toLocaleTimeString()}</span>
               </div>
               
-              <button
-                onClick={refreshData}
-                disabled={isLoading}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors duration-200"
-              >
-                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                <span>Actualizar</span>
-              </button>
-              
-              <button
-                onClick={handleLogout}
-                className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors duration-200"
-                title="Cerrar sesión"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Salir</span>
-              </button>
-              
+              {/* Status indicators - Responsive */}
               <div className="flex items-center space-x-2">
                 <div className={`w-3 h-3 rounded-full ${
                   realTimeData.systemStatus === 'online' ? 'bg-green-500' : 
                   realTimeData.systemStatus === 'connecting' ? 'bg-yellow-500' :
                   'bg-red-500'
                 } animate-pulse`}></div>
-                <span className="text-sm font-medium text-gray-700">
+                <span className="hidden md:block text-sm font-medium text-gray-700">
                   {realTimeData.systemStatus === 'online' ? 'Sistema Online' : 
                    realTimeData.systemStatus === 'connecting' ? 'Conectando...' :
                    'Sistema Offline'}
                 </span>
               </div>
               
-              <div className="flex items-center space-x-2">
+              <div className="hidden lg:flex items-center space-x-2">
                 <Database className={`w-4 h-4 ${backendConnected ? 'text-green-500' : 'text-red-500'}`} />
                 <span className="text-xs text-gray-600">
                   {backendConnected ? 'BD Conectada' : 'BD Desconectada'}
                 </span>
               </div>
+              
+              {/* Action buttons - Responsive */}
+              <button
+                onClick={refreshData}
+                disabled={isLoading}
+                className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors duration-200"
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:block">Actualizar</span>
+              </button>
+              
+              <button
+                onClick={handleLogout}
+                className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors duration-200"
+                title="Cerrar sesión"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:block">Salir</span>
+              </button>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="flex">
-        {/* Sidebar */}
-        <aside className="w-64 bg-white/80 backdrop-blur-md border-r border-gray-200/50 min-h-[calc(100vh-80px)] p-4">
+      <div className="flex relative">
+        {/* Mobile Menu Overlay */}
+        {isMobileMenuOpen && (
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+        )}
+
+        {/* Sidebar - Desktop */}
+        <aside className="hidden lg:block w-64 bg-white/80 backdrop-blur-md border-r border-gray-200/50 min-h-[calc(100vh-80px)] p-4">
           <nav className="space-y-2">
             {tabs.map((tab) => {
               const Icon = tab.icon;
@@ -335,8 +371,58 @@ function App() {
           </nav>
         </aside>
 
+        {/* Mobile Sidebar */}
+        <aside className={`fixed top-[80px] left-0 w-64 h-[calc(100vh-80px)] bg-white/95 backdrop-blur-md border-r border-gray-200/50 p-4 transform transition-transform duration-300 ease-in-out z-50 lg:hidden ${
+          isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}>
+          <nav className="space-y-2">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left transition-all duration-200 ${
+                    isActive
+                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/25'
+                      : 'text-gray-600 hover:bg-gray-100/70 hover:text-gray-900'
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span className="font-medium">{tab.label}</span>
+                  {tab.id === 'logs' && realTimeData.pendingMessages > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                      {realTimeData.pendingMessages}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+          
+          {/* Mobile User Info */}
+          {currentUser && (
+            <div className="mt-6 p-4 bg-white/50 rounded-lg border border-gray-200/50">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-green-600 rounded-full flex items-center justify-center">
+                  <Shield className="w-4 h-4 text-white" />
+                </div>
+                <div className="text-sm">
+                  <p className="font-medium text-gray-900">{currentUser.username}</p>
+                  <p className="text-xs text-gray-600 capitalize">{currentUser.role}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </aside>
+
         {/* Main Content */}
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-4 sm:p-6 lg:ml-0">
           <div className="max-w-7xl mx-auto">
             {renderActiveComponent()}
           </div>

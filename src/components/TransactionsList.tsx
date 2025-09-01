@@ -1,18 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Search, 
-  Filter, 
   Download, 
   Eye, 
   CheckCircle, 
   Clock, 
   XCircle,
   DollarSign,
-  User
+  User,
+  Plus,
+  Trash2
 } from 'lucide-react';
+import { apiService } from '../services/api';
 import AdvancedFilters, { FilterConfig } from './AdvancedFilters';
 import ExportModal, { ExportConfig } from './ExportModal';
 import TransactionDetailModal from './TransactionDetailModal';
+import AddTransactionModal from './AddTransactionModal';
+import DeleteTransactionModal from './DeleteTransactionModal';
+import { useNotifications } from './NotificationSystem';
 import jsPDF from 'jspdf';
 
 interface Transaction {
@@ -41,6 +45,67 @@ const TransactionsList: React.FC = () => {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isFilterLoading, setIsFilterLoading] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
+  const [deletingTransactionId, setDeletingTransactionId] = useState<string | null>(null);
+  
+  // Sistema de notificaciones
+  const { addNotification } = useNotifications();
+  
+  // Función para eliminar transacción
+  const handleDeleteTransaction = (transactionId: string) => {
+    const transaction = transactions.find(t => t.id === transactionId);
+    if (transaction) {
+      setTransactionToDelete(transaction);
+      setIsDeleteModalOpen(true);
+    }
+  };
+
+  const executeDeleteTransaction = async (transactionId: string) => {
+    try {
+      setDeletingTransactionId(transactionId);
+      
+      const response = await apiService.deleteTransaction(transactionId);
+      
+      if (response.success) {
+        // Actualizar la lista de transacciones
+        setTransactions(prev => prev.filter(t => t.id !== transactionId));
+        setFilteredTransactions(prev => prev.filter(t => t.id !== transactionId));
+        
+        // Cerrar modal
+        setIsDeleteModalOpen(false);
+        setTransactionToDelete(null);
+        
+        // Notificación de éxito profesional
+        addNotification({
+          type: 'success',
+          title: '✅ Eliminación Completada',
+          message: `Transacción ${transactionId} eliminada exitosamente con debugging completo.`
+        });
+      } else {
+        throw new Error(response.message || 'Error al eliminar la transacción');
+      }
+    } catch (error: any) {
+      console.error('Error eliminando transacción:', error);
+      
+      // Notificación de error profesional
+      addNotification({
+        type: 'error',
+        title: '❌ Error en Eliminación',
+        message: `No se pudo eliminar la transacción ${transactionId}: ${error.message || 'Error desconocido'}`
+      });
+      
+      throw error; // Re-throw para que el modal pueda manejarlo
+    } finally {
+      setDeletingTransactionId(null);
+    }
+  };
+
+  const handleCloseDeleteModal = () => {
+    setIsDeleteModalOpen(false);
+    setTransactionToDelete(null);
+  };
   
   // Estado de filtros avanzados
   const [filters, setFilters] = useState<FilterConfig>({
@@ -72,11 +137,7 @@ const TransactionsList: React.FC = () => {
     const fetchTransactions = async () => {
       try {
         setLoading(true);
-        const response = await fetch('/api/transactions');
-        if (!response.ok) {
-          throw new Error('Error al cargar transacciones');
-        }
-        const data = await response.json();
+        const data = await apiService.getTransactions();
         // Calcular ganancias para cada transacción
         const transactionsWithGanancia = data.map((transaction: Transaction) => {
           // Comisión total = usdTotal * (comision / 100)
@@ -810,13 +871,22 @@ const TransactionsList: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900">Gestión de Transacciones</h1>
-        <button 
-          onClick={() => setIsExportModalOpen(true)}
-          className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors duration-200"
-        >
-          <Download className="w-4 h-4" />
-          <span>Exportar</span>
-        </button>
+        <div className="flex items-center space-x-3">
+          <button 
+            onClick={() => setIsAddModalOpen(true)}
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Nueva Transacción</span>
+          </button>
+          <button 
+            onClick={() => setIsExportModalOpen(true)}
+            className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors duration-200"
+          >
+            <Download className="w-4 h-4" />
+            <span>Exportar</span>
+          </button>
+        </div>
       </div>
 
       {/* Filtros Avanzados */}
@@ -883,65 +953,142 @@ const TransactionsList: React.FC = () => {
         </div>
       )}
 
-      {/* Transactions Table */}
+      {/* Transactions - Mobile Card Layout */}
       {!loading && !error && (
-        <div className="bg-white/70 backdrop-blur-md rounded-2xl border border-gray-200/50 shadow-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-max">
-              <thead className="bg-gray-50/70">
-                <tr>
-                  <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">ID</th>
-                  <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Fecha</th>
-                  <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">Cliente</th>
-                  <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Colaborador</th>
-                  <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">USD Total</th>
-                  <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Comisión %</th>
-                  <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Tasa Usada</th>
-                  <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Monto Gs</th>
-                  <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Estado</th>
-                  <th className="px-4 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Acción</th>
-                </tr>
-            </thead>
+        <>
+          {/* Mobile Card Layout */}
+          <div className="block lg:hidden space-y-4">
+            {filteredTransactions.map((transaction) => (
+              <div key={transaction.id} className="bg-white/70 backdrop-blur-md rounded-2xl border border-gray-200/50 shadow-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                      <User className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">{transaction.cliente}</div>
+                      <div className="text-xs text-gray-500">ID: {transaction.id}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => {
+                        setSelectedTransaction(transaction);
+                        setIsDetailModalOpen(true);
+                      }}
+                      className="text-blue-600 hover:text-blue-900 transition-colors duration-200 p-2 rounded-md hover:bg-blue-50"
+                      title="Ver detalles"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTransaction(transaction.id)}
+                      disabled={deletingTransactionId === transaction.id}
+                      className="text-red-600 hover:text-red-900 transition-colors duration-200 p-2 rounded-md hover:bg-red-50 disabled:opacity-50"
+                      title="Eliminar"
+                    >
+                      {deletingTransactionId === transaction.id ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-gray-500">Fecha:</span>
+                    <div className="font-medium">{new Date(transaction.fecha).toLocaleDateString()}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Colaborador:</span>
+                    <div className="font-medium">{transaction.colaborador}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">USD Total:</span>
+                    <div className="font-medium text-green-600">${transaction.usdTotal.toFixed(2)}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Comisión:</span>
+                    <div className="font-medium">{transaction.comision}%</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Tasa:</span>
+                    <div className="font-medium text-blue-600">{transaction.tasaUsada.toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Estado:</span>
+                    <div className="flex items-center space-x-1">
+                      {getStatusIcon(transaction.status)}
+                      <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(transaction.status)}`}>
+                        {transaction.status === 'completed' ? 'Completada' : transaction.status === 'processing' ? 'Procesando' : 'Error'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop Table Layout */}
+          <div className="hidden lg:block bg-white/70 backdrop-blur-md rounded-2xl border border-gray-200/50 shadow-lg overflow-hidden">
+            <div className="overflow-hidden">
+              <table className="w-full table-fixed">
+                <thead className="bg-gray-50/70">
+                  <tr>
+                   <th className="w-16 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                   <th className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                   <th className="w-40 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
+                   <th className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Colaborador</th>
+                   <th className="w-28 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">USD Total</th>
+                   <th className="w-24 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Comisión %</th>
+                   <th className="w-28 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tasa Usada</th>
+                   <th className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Monto Gs</th>
+                   <th className="w-28 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                   <th className="w-24 px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                 </tr>
+             </thead>
             <tbody className="bg-white/30 divide-y divide-gray-200/50">
               {filteredTransactions.map((transaction) => (
                 <tr key={transaction.id} className="hover:bg-gray-50/30 transition-colors duration-200">
-                  <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900 w-16">
+                  <td className="w-16 px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                     {transaction.id}
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 w-32">
+                  <td className="w-32 px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                     {new Date(transaction.fecha).toLocaleDateString()}
                     <br />
                     <span className="text-xs text-gray-400">
                       {new Date(transaction.fecha).toLocaleTimeString()}
                     </span>
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap w-40">
+                  <td className="w-40 px-4 py-3">
                     <div className="flex items-center">
                       <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center mr-3">
                         <User className="w-4 h-4 text-white" />
                       </div>
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{transaction.cliente}</div>
-                        <div className="text-xs text-gray-500">{transaction.chatId.split('@')[0]}</div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium text-gray-900 truncate">{transaction.cliente}</div>
+                        <div className="text-xs text-gray-500 truncate">{transaction.chatId.split('@')[0]}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 w-32">{transaction.colaborador}</td>
-                  <td className="px-4 py-4 whitespace-nowrap w-28">
+                  <td className="w-32 px-4 py-3 whitespace-nowrap text-sm text-gray-900">{transaction.colaborador}</td>
+                  <td className="w-28 px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center">
                       <DollarSign className="w-4 h-4 text-green-500 mr-1" />
                       <span className="text-sm font-medium text-gray-900">${transaction.usdTotal.toFixed(2)}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 w-24">{transaction.comision}%</td>
-                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 w-28">
+                  <td className="w-24 px-4 py-3 whitespace-nowrap text-sm text-gray-900">{transaction.comision}%</td>
+                  <td className="w-28 px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                     <span className="font-medium text-blue-600">{transaction.tasaUsada.toLocaleString()}</span>
                     <span className="text-xs text-gray-500 ml-1">Gs/$</span>
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 w-32">
+                  <td className="w-32 px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                     {transaction.montoGs.toLocaleString()} Gs
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap w-32">
+                  <td className="w-28 px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center space-x-2">
                       {getStatusIcon(transaction.status)}
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(transaction.status)}`}>
@@ -950,17 +1097,31 @@ const TransactionsList: React.FC = () => {
                       </span>
                     </div>
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-center w-20">
-                    <button
-                      onClick={() => {
-                        setSelectedTransaction(transaction);
-                        setIsDetailModalOpen(true);
-                      }}
-                      className="text-blue-600 hover:text-blue-900 transition-colors duration-200 inline-flex items-center justify-center"
-                      title="Ver detalles de la transacción"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
+                  <td className="w-24 px-4 py-3 whitespace-nowrap text-center">
+                    <div className="flex items-center justify-center space-x-2">
+                      <button
+                        onClick={() => {
+                          setSelectedTransaction(transaction);
+                          setIsDetailModalOpen(true);
+                        }}
+                        className="text-blue-600 hover:text-blue-900 transition-colors duration-200 inline-flex items-center justify-center p-1 rounded-md hover:bg-blue-50"
+                        title="Ver detalles"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTransaction(transaction.id)}
+                        disabled={deletingTransactionId === transaction.id}
+                        className="text-red-600 hover:text-red-900 transition-colors duration-200 inline-flex items-center justify-center p-1 rounded-md hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Eliminar"
+                      >
+                        {deletingTransactionId === transaction.id ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -968,6 +1129,7 @@ const TransactionsList: React.FC = () => {
           </table>
         </div>
       </div>
+      </>
       )}
 
       {/* Statistics */}
@@ -1026,6 +1188,60 @@ const TransactionsList: React.FC = () => {
           setSelectedTransaction(null);
         }}
         transaction={selectedTransaction}
+      />
+      
+      {/* Add Transaction Modal */}
+      <AddTransactionModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onSuccess={(message) => {
+          addNotification({
+            title: 'Transacción Creada',
+            message,
+            type: 'success'
+          });
+        }}
+        onError={(message) => {
+          addNotification({
+            title: 'Error',
+            message,
+            type: 'error'
+          });
+        }}
+        onTransactionCreated={() => {
+           // Recargar la lista de transacciones
+           const reloadTransactions = async () => {
+             try {
+               setLoading(true);
+               const data = await apiService.getTransactions();
+               const transactionsWithGanancia = data.map((transaction: Transaction) => {
+                 const comisionTotal = transaction.usdTotal * (transaction.comision / 100);
+                 return {
+                   ...transaction,
+                   gananciaGabriel: comisionTotal * 0.5,
+                   gananciaColaborador: comisionTotal * 0.5
+                 };
+               });
+               setTransactions(transactionsWithGanancia);
+               setError(null);
+             } catch (err: any) {
+               console.error('Error fetching transactions:', err);
+               setError(err.message);
+               setTransactions([]);
+             } finally {
+               setLoading(false);
+             }
+           };
+           reloadTransactions();
+         }}
+      />
+
+      {/* Delete Transaction Modal */}
+      <DeleteTransactionModal
+        isOpen={isDeleteModalOpen}
+        onClose={handleCloseDeleteModal}
+        transaction={transactionToDelete}
+        onConfirm={executeDeleteTransaction}
       />
     </div>
   );

@@ -65,13 +65,14 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onError }) => {
       if (data.success) {
         setSuccess('¡Inicio de sesión exitoso!');
         
-        // Guardar token en localStorage
-        localStorage.setItem('auth_token', data.token);
-        localStorage.setItem('user_data', JSON.stringify(data.user));
+        // Guardar tokens en localStorage
+        localStorage.setItem('authToken', data.accessToken);
+        localStorage.setItem('refreshToken', data.refreshToken);
+        localStorage.setItem('user', JSON.stringify(data.user));
         
         // Llamar callback de éxito
         setTimeout(() => {
-          onLogin(data.token, data.user);
+          onLogin(data.accessToken, data.user);
         }, 1000);
       } else {
         throw new Error(data.error || 'Error desconocido');

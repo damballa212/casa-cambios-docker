@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BarChart3, Download, Calendar, TrendingUp, DollarSign, Users } from 'lucide-react';
 import ExportModal, { ExportConfig } from './ExportModal';
 import jsPDF from 'jspdf';
+import { apiService } from '../services/api';
 
 interface SummaryData {
   totalTransactions: number;
@@ -60,12 +61,8 @@ const ReportsAnalytics: React.FC = () => {
     const fetchReportsData = async () => {
       try {
         setLoading(true);
-        const response = await fetch('/api/reports/summary');
-        if (!response.ok) {
-          throw new Error('Error al cargar datos de reportes');
-        }
-        const data = await response.json();
-        setSummaryData(data);
+        const data = await apiService.getReportsSummary();
+        setSummaryData(data as any);
         setError(null);
       } catch (err) {
         console.error('Error fetching reports data:', err);

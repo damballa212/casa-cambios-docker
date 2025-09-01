@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Plus, Edit, TrendingUp, DollarSign, Percent, X, Save } from 'lucide-react';
+import { apiService } from '../services/api';
 
 interface Collaborator {
   id: number;
@@ -28,11 +29,7 @@ const CollaboratorManagement: React.FC = () => {
     const fetchCollaborators = async () => {
       try {
         setLoading(true);
-        const response = await fetch('/api/collaborators');
-        if (!response.ok) {
-          throw new Error('Error al cargar colaboradores');
-        }
-        const data = await response.json();
+        const data = await apiService.getCollaborators();
         setCollaborators(data);
         setError(null);
       } catch (err) {
@@ -58,23 +55,12 @@ const CollaboratorManagement: React.FC = () => {
 
     try {
       setIsSubmitting(true);
-      const response = await fetch('/api/collaborators', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: addForm.name.trim(),
-          basePct: addForm.basePct ? parseFloat(addForm.basePct) : null,
-          status: addForm.status
-        }),
+      const newCollaborator = await apiService.createCollaborator({
+        name: addForm.name.trim(),
+        basePct: addForm.basePct ? parseFloat(addForm.basePct) : null,
+        status: addForm.status
       });
 
-      if (!response.ok) {
-        throw new Error('Error al crear el colaborador');
-      }
-
-      const newCollaborator = await response.json();
       setCollaborators(prev => [...prev, newCollaborator]);
       setShowAddForm(false);
       setAddForm({ name: '', basePct: '', status: 'active' });
