@@ -687,10 +687,9 @@ const TransactionsList: React.FC = () => {
        
        // Resumen estadístico con diseño moderno
         yPosition += 20;
-        if (yPosition > 200) {
-          doc.addPage();
-          yPosition = 25;
-        }
+        // Forzar nueva página para el resumen ejecutivo
+        doc.addPage();
+        yPosition = 25;
         
         // Título de resumen
         doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
