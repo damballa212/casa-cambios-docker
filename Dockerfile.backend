@@ -1,0 +1,42 @@
+# Backend Dockerfile para Casa de Cambios API
+FROM node:18-alpine
+
+# Instalar dependencias del sistema para Puppeteer
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    freetype-dev \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont
+
+# Establecer directorio de trabajo
+WORKDIR /app
+
+# Copiar archivos de dependencias del servidor
+COPY server/package*.json ./
+
+# Instalar dependencias
+RUN npm ci --only=production
+
+# Copiar código fuente del servidor
+COPY server/ .
+
+# Configurar Puppeteer para usar Chromium instalado
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# Crear usuario no-root para seguridad
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nodejs -u 1001
+
+# Cambiar propiedad de archivos
+RUN chown -R nodejs:nodejs /app
+USER nodejs
+
+# Exponer puerto (EasyPanel lo asignará automáticamente)
+EXPOSE 3001
+
+# Comando de inicio
+CMD ["npm", "start"]
