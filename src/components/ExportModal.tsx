@@ -5,16 +5,11 @@ import {
   FileText, 
   FileSpreadsheet, 
   Database, 
-  Calendar, 
-  Filter, 
-  Settings, 
   CheckCircle,
-  AlertCircle,
   Info,
   Save,
   FolderOpen,
-  Trash2,
-  Edit3
+  Trash2
 } from 'lucide-react';
 
 // Tipos de datos que se pueden exportar

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Database, RefreshCw, AlertTriangle, CheckCircle, Info, XCircle, Clock, Filter, Search, Download } from 'lucide-react';
+import { Database, RefreshCw, AlertTriangle, CheckCircle, XCircle, Clock, Filter, Search, Download } from 'lucide-react';
 import { apiService } from '../services/api';
 
 interface LogEntry {

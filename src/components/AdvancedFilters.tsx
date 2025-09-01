@@ -1,14 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Search, 
   Filter, 
   X, 
   Calendar, 
-  DollarSign, 
   User, 
   CheckCircle, 
-  Clock, 
-  XCircle,
   RotateCcw,
   Settings,
   ChevronDown,

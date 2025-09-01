@@ -3,11 +3,7 @@ import {
   X,
   User,
   DollarSign,
-  Calendar,
   Hash,
-  Percent,
-  TrendingUp,
-  MessageSquare,
   Download,
   CheckCircle,
   Clock,
@@ -101,8 +97,6 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
 
   const handleExportSingle = async (config: any) => {
     // Crear un array con solo esta transacción para el export
-    const singleTransactionData = [transaction];
-    
     // Aquí puedes implementar la lógica de exportación específica
     // Por ahora, simularemos el proceso
     console.log('Exportando transacción individual:', transaction.id, 'con configuración:', config);

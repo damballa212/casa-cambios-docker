@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, Download, Calendar, TrendingUp, DollarSign, Users } from 'lucide-react';
+import { BarChart3, Download, TrendingUp, DollarSign, Users } from 'lucide-react';
 import ExportModal, { ExportConfig } from './ExportModal';
 import jsPDF from 'jspdf';
 import { apiService } from '../services/api';
@@ -50,7 +50,6 @@ interface SummaryData {
 
 const ReportsAnalytics: React.FC = () => {
   const [dateRange, setDateRange] = useState('last30days');
-  const [reportType, setReportType] = useState('summary');
   const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -482,7 +481,6 @@ const ReportsAnalytics: React.FC = () => {
     data.forEach((item, index) => {
       const sliceAngle = (item.value / total) * 360;
       const startAngle = currentAngle;
-      const endAngle = currentAngle + sliceAngle;
       
       // Colores dinámicos
       const colors = [
@@ -605,7 +603,7 @@ const ReportsAnalytics: React.FC = () => {
   };
 
   // Función para verificar si necesita nueva página
-  const checkNewPage = (doc: any, yPosition: number, requiredSpace: number, pageHeight: number, margin: number) => {
+  const checkNewPage = (doc: any, yPosition: number, requiredSpace: number, pageHeight: number) => {
     if (yPosition + requiredSpace > pageHeight - 30) {
       doc.addPage();
       return 30; // Nueva posición Y en la nueva página
@@ -631,7 +629,6 @@ const ReportsAnalytics: React.FC = () => {
     const accentColor = [168, 85, 247]; // Púrpura
     const warningColor = [245, 158, 11]; // Amarillo
     const successColor = [16, 185, 129]; // Verde claro
-    const errorColor = [239, 68, 68]; // Rojo
     const darkColor = [31, 41, 55]; // Gris oscuro
     const lightGray = [248, 250, 252]; // Gris muy claro
     
@@ -670,7 +667,7 @@ const ReportsAnalytics: React.FC = () => {
     yPosition = 50;
     
     // Dashboard de métricas con gráficos - SIEMPRE MOSTRAR
-    yPosition = checkNewPage(doc, yPosition, 80, pageHeight, margin);
+    yPosition = checkNewPage(doc, yPosition, 80, pageHeight);
     
     // Título de sección
     doc.setFillColor(darkColor[0], darkColor[1], darkColor[2]);
@@ -713,7 +710,7 @@ const ReportsAnalytics: React.FC = () => {
     yPosition += 65;
     
     // Gráfico circular para distribución de colaboradores - SOLO DATOS REALES
-    yPosition = checkNewPage(doc, yPosition, 100, pageHeight, margin);
+    yPosition = checkNewPage(doc, yPosition, 100, pageHeight);
     
     // Verificar si hay datos reales de colaboradores
     const hasCollabData = collaboratorPerformance && collaboratorPerformance.length > 0;
@@ -778,7 +775,7 @@ const ReportsAnalytics: React.FC = () => {
     yPosition += 90; // Más espacio al final de la sección
     
     // Gráfico de tendencias mensuales - SOLO DATOS REALES
-    yPosition = checkNewPage(doc, yPosition, 80, pageHeight, margin);
+    yPosition = checkNewPage(doc, yPosition, 80, pageHeight);
     
     const hasMonthlyData = monthlyData && monthlyData.length > 0;
     
@@ -825,7 +822,7 @@ const ReportsAnalytics: React.FC = () => {
     yPosition += 60; // Más espacio al final
     
     // Panel de KPIs con datos reales
-    yPosition = checkNewPage(doc, yPosition, 70, pageHeight, margin);
+    yPosition = checkNewPage(doc, yPosition, 70, pageHeight);
     
     // Título de sección con más altura
     doc.setFillColor(warningColor[0], warningColor[1], warningColor[2]);

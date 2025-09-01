@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Edit, TrendingUp, DollarSign, Phone, Mail, Calendar, Search, Filter, Eye, X, Save } from 'lucide-react';
+import { Users, Plus, Edit, TrendingUp, DollarSign, Phone, Calendar, Search, Filter, X, Save } from 'lucide-react';
 import { apiService } from '../services/api';
 
 interface Client {
