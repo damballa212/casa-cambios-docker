@@ -148,12 +148,23 @@ app.post('/api/backups/create', authenticateToken, requireRole(['admin', 'owner'
 // Listar backups disponibles
 app.get('/api/backups', authenticateToken, async (req, res) => {
   try {
-    const { listBackups } = await import('./backup-system.js');
-    const backups = await listBackups();
+    if (!supabase) {
+      throw new Error('Supabase client not initialized');
+    }
+    
+    // Consultar directamente la tabla de backups
+    const { data: backups, error } = await supabase
+      .from('database_backups')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      throw error;
+    }
     
     res.json({
       success: true,
-      backups: backups.map(backup => ({
+      backups: (backups || []).map(backup => ({
         id: backup.backup_id,
         type: backup.type,
         description: backup.description,
