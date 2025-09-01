@@ -37,7 +37,7 @@ try {
 // Rate limiter general para API
 export const apiRateLimiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60000, // 1 minuto
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // 100 requests por minuto
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 1000, // 1000 requests por minuto (más permisivo)
   message: {
     error: 'Demasiadas solicitudes desde esta IP',
     code: 'RATE_LIMIT_EXCEEDED',
@@ -54,8 +54,8 @@ export const apiRateLimiter = rateLimit({
     return req.path === '/health';
   },
   keyGenerator: (req) => {
-    // Usar IP + User-Agent para generar key más específica
-    return `${req.ip}-${req.get('User-Agent') || 'unknown'}`;
+    // Usar solo IP para evitar múltiples keys por usuario
+    return req.ip;
   }
 });
 
