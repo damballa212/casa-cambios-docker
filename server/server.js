@@ -1731,7 +1731,9 @@ app.get('/api/transactions', async (req, res) => {
       tasaUsada: parseFloat(tx.tasa_usada) || 7300,
       status: tx.status || 'completed',
       chatId: tx.chat_id || tx.whatsapp_id || '',
-      idempotencyKey: tx.idempotency_key || ''
+      idempotencyKey: tx.idempotency_key || '',
+      montoColaboradorUsd: parseFloat(tx.monto_colaborador_usd) || 0,
+      montoComisionGabrielUsd: parseFloat(tx.monto_comision_gabriel_usd) || 0
     }));
     
     res.json(formattedTransactions);
