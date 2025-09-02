@@ -1662,15 +1662,20 @@ app.get('/api/dashboard/metrics', async (req, res) => {
     
     try {
       // Intentar obtener transacciones de hoy
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date();
+      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
+      const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
+      
       const { data: txData, error: txError } = await supabase
         .from('transactions')
-        .select('usd_total')
-        .gte('fecha', today);
+        .select('usd_total, fecha')
+        .gte('fecha', startOfDay)
+        .lt('fecha', endOfDay);
       
       if (!txError && txData) {
         totalTransactions = txData.length;
         dailyVolume = txData.reduce((sum, tx) => sum + (parseFloat(tx.usd_total) || 0), 0);
+        console.log(`📊 Métricas de hoy: ${totalTransactions} transacciones, $${dailyVolume.toFixed(2)} USD`);
       }
     } catch (err) {
       console.log('Warning: Could not fetch transaction data:', err.message);
@@ -3145,17 +3150,39 @@ app.post('/api/database/format', authenticateToken, requireRole(['admin', 'owner
     console.log(`👤 Usuario: ${req.user?.username || 'unknown'}`);
     console.log(`🕐 Timestamp: ${new Date().toISOString()}`);
     
-    // PASO 1: Backup automático temporalmente deshabilitado
-    console.log('⚠️ ADVERTENCIA: Backup automático deshabilitado temporalmente');
-    console.log('🚨 PROCEDER CON FORMATEO SIN BACKUP AUTOMÁTICO');
-    console.log('📝 RECOMENDACIÓN: Crear backup manual antes de continuar');
-    
-    // Log de la operación crítica
-    await logger.warn(COMPONENTS.DATABASE, `Formateo iniciado SIN backup automático por ${req.user?.username}`, {
-      user: req.user?.username,
-      timestamp: new Date().toISOString(),
-      warning: 'Backup automático deshabilitado'
-    });
+    // PASO 1: Crear backup automático antes del formateo
+    console.log('🛡️ Creando backup automático antes del formateo...');
+    let backupResult = null;
+    try {
+      // Usar el sistema de backup existente que sabemos que funciona
+      const { backupSystem } = await import('./backup-system.js');
+      backupResult = await backupSystem.createBackup(
+        'pre-format', 
+        `Backup automático antes de formateo por ${req.user?.username || 'unknown'}`,
+        req.user?.username || 'unknown'
+      );
+      console.log(`✅ Backup creado exitosamente: ${backupResult.backupId}`);
+      
+      // Log de la operación exitosa
+      await logger.info(COMPONENTS.DATABASE, `Backup automático creado antes de formateo por ${req.user?.username}`, {
+        user: req.user?.username,
+        backupId: backupResult.backupId,
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (backupError) {
+      console.error('❌ Error creando backup:', backupError);
+      
+      // Log del error pero continuar con formateo
+      await logger.error(COMPONENTS.DATABASE, `Error en backup automático: ${backupError.message}`, {
+        user: req.user?.username,
+        error: backupError.message,
+        timestamp: new Date().toISOString()
+      });
+      
+      console.log('⚠️ ADVERTENCIA: Continuando formateo sin backup automático');
+      console.log('📝 RECOMENDACIÓN: Crear backup manual si es necesario');
+    }
     
     // Colaboradores protegidos que NO se pueden eliminar
     const protectedCollaborators = ['Gabriel Zambrano', 'Anael', 'Patty'];
@@ -3165,7 +3192,7 @@ app.post('/api/database/format', authenticateToken, requireRole(['admin', 'owner
     const { error: deleteTransactionsError } = await supabase
       .from('transactions')
       .delete()
-      .neq('id', 0); // Eliminar todos los registros
+      .gte('id', 0); // Eliminar TODOS los registros (id >= 0)
     
     if (deleteTransactionsError) {
       console.error('❌ Error eliminando transacciones:', deleteTransactionsError);
@@ -3178,7 +3205,7 @@ app.post('/api/database/format', authenticateToken, requireRole(['admin', 'owner
     const { error: deleteClientsError } = await supabase
       .from('clients')
       .delete()
-      .neq('id', 0); // Eliminar todos los registros
+      .gte('id', 0); // Eliminar TODOS los registros (id >= 0)
     
     if (deleteClientsError) {
       console.error('❌ Error eliminando clientes:', deleteClientsError);
@@ -3220,7 +3247,7 @@ app.post('/api/database/format', authenticateToken, requireRole(['admin', 'owner
     const { error: deleteRatesError } = await supabase
       .from('global_rate')
       .delete()
-      .neq('id', 0); // Eliminar todos los registros
+      .gte('id', 0); // Eliminar TODOS los registros (id >= 0)
     
     if (deleteRatesError) {
       console.error('❌ Error eliminando historial de tasas:', deleteRatesError);
@@ -3228,18 +3255,62 @@ app.post('/api/database/format', authenticateToken, requireRole(['admin', 'owner
     }
     console.log('✅ Historial de tasas eliminado exitosamente');
     
-    // 6. Insertar tasa global por defecto
+    // 6. Eliminar logs del sistema
+    console.log('🗑️ Eliminando logs del sistema...');
+    const { error: deleteLogsError } = await supabase
+      .from('system_logs')
+      .delete()
+      .gte('id', 0); // Eliminar TODOS los registros (id >= 0)
+    
+    if (deleteLogsError && deleteLogsError.code !== 'PGRST116') {
+      console.warn('⚠️ Advertencia eliminando logs:', deleteLogsError.message);
+    } else {
+      console.log('✅ Logs del sistema eliminados exitosamente');
+    }
+    
+    // 7. Eliminar registros de actividad reciente
+    console.log('🗑️ Eliminando actividad reciente...');
+    const { error: deleteActivityError } = await supabase
+      .from('recent_activity')
+      .delete()
+      .gte('id', 0); // Eliminar TODOS los registros (id >= 0)
+    
+    if (deleteActivityError && deleteActivityError.code !== 'PGRST116') {
+      console.warn('⚠️ Advertencia eliminando actividad:', deleteActivityError.message);
+    } else {
+      console.log('✅ Actividad reciente eliminada exitosamente');
+    }
+    
+    // 8. PRESERVAR registros de backups (NO eliminar)
+    console.log('🛡️ Preservando registros de backups (no se eliminan en formateo)...');
+    console.log('✅ Registros de backups preservados correctamente');
+    
+    // 9. Eliminar sesiones de usuario
+    console.log('🗑️ Eliminando sesiones de usuario...');
+    const { error: deleteSessionsError } = await supabase
+      .from('user_sessions')
+      .delete()
+      .gte('id', 0); // Eliminar TODOS los registros (id >= 0)
+    
+    if (deleteSessionsError && deleteSessionsError.code !== 'PGRST116') {
+      console.warn('⚠️ Advertencia eliminando sesiones:', deleteSessionsError.message);
+    } else {
+      console.log('✅ Sesiones de usuario eliminadas exitosamente');
+    }
+    
+    // 10. Insertar tasa global por defecto
     console.log('🔄 Insertando tasa global por defecto...');
-    const { error: resetRateError } = await supabase
+    const { error: insertRateError } = await supabase
       .from('global_rate')
       .insert({
         rate: 7300,
+        created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       });
     
-    if (resetRateError) {
-      console.error('❌ Error insertando tasa por defecto:', resetRateError);
-      throw new Error(`Error insertando tasa por defecto: ${resetRateError.message}`);
+    if (insertRateError) {
+      console.error('❌ Error insertando tasa por defecto:', insertRateError);
+      throw new Error(`Error insertando tasa por defecto: ${insertRateError.message}`);
     }
     console.log('✅ Tasa global establecida en 7300');
     
