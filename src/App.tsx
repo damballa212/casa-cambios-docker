@@ -12,7 +12,8 @@ import {
   LogOut,
   Shield,
   Menu,
-  X
+  X,
+  Trash2
 } from 'lucide-react';
 import DashboardMetrics from './components/DashboardMetrics';
 import TransactionsList from './components/TransactionsList';
@@ -133,6 +134,29 @@ function App() {
       setActiveTab('dashboard'); // Resetear a dashboard
       console.log('👋 Usuario desconectado');
     }
+  };
+
+  // Función para limpiar caché y forzar recarga
+  const clearCacheAndReload = () => {
+    console.log('🧹 Limpiando caché del navegador...');
+    
+    // Limpiar localStorage completamente
+    localStorage.clear();
+    
+    // Limpiar sessionStorage
+    sessionStorage.clear();
+    
+    // Limpiar caché del navegador si está disponible
+    if ('caches' in window) {
+      caches.keys().then(names => {
+        names.forEach(name => {
+          caches.delete(name);
+        });
+      });
+    }
+    
+    // Forzar recarga completa de la página
+    window.location.reload();
   };
 
   useEffect(() => {
@@ -317,6 +341,15 @@ function App() {
               >
                 <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
                 <span className="hidden sm:block">Actualizar</span>
+              </button>
+              
+              <button
+                onClick={clearCacheAndReload}
+                className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors duration-200"
+                title="Limpiar caché y recargar - Útil si no ves los cambios más recientes"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span className="hidden sm:block">Limpiar Caché</span>
               </button>
               
               <button
