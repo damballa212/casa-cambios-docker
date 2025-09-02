@@ -3201,17 +3201,17 @@ app.post('/api/database/format', authenticateToken, requireRole(['admin', 'owner
       const path = await import('path');
       const { fileURLToPath } = await import('url');
       const __filename = fileURLToPath(import.meta.url);
-      const __dirname = path.dirname(__filename);
+      const __dirname = path.default.dirname(__filename);
       
-      const backupDir = path.join(__dirname, '../backups');
-      if (!fs.existsSync(backupDir)) {
-        fs.mkdirSync(backupDir, { recursive: true });
+      const backupDir = path.default.join(__dirname, '../backups');
+      if (!fs.default.existsSync(backupDir)) {
+        fs.default.mkdirSync(backupDir, { recursive: true });
       }
       
-      const backupFilePath = path.join(backupDir, `backup_${backupId}.json`);
+      const backupFilePath = path.default.join(backupDir, `backup_${backupId}.json`);
       const backupContent = JSON.stringify(backupData, null, 2);
       
-      fs.writeFileSync(backupFilePath, backupContent);
+      fs.default.writeFileSync(backupFilePath, backupContent);
       backupData.metadata.totalSize = Buffer.byteLength(backupContent, 'utf8');
       
       // Registrar backup en la tabla de backups
@@ -3233,11 +3233,11 @@ app.post('/api/database/format', authenticateToken, requireRole(['admin', 'owner
       if (insertError) {
         console.error('❌ Error registrando backup en BD:', insertError);
         // Eliminar archivo si no se pudo registrar en BD
-        try {
-          fs.unlinkSync(backupFilePath);
-        } catch (unlinkError) {
-          console.error('❌ Error eliminando archivo de backup fallido:', unlinkError);
-        }
+         try {
+           fs.default.unlinkSync(backupFilePath);
+         } catch (unlinkError) {
+           console.error('❌ Error eliminando archivo de backup fallido:', unlinkError);
+         }
         throw new Error(`Error registrando backup en base de datos: ${insertError.message}`);
       }
       
