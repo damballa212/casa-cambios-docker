@@ -45,6 +45,7 @@ import {
   NOTIFICATION_TYPES,
   PRIORITY_LEVELS
 } from './notifications.js';
+import { initializeBackupScheduler, getSchedulerStatus } from './scheduler.js';
 import multer from 'multer';
 
 const app = express();
@@ -761,6 +762,44 @@ app.post('/api/backups/cleanup', authenticateToken, requireRole(['admin', 'owner
     res.status(500).json({
       error: 'Error en limpieza de backups',
       message: error.message
+    });
+  }
+});
+
+// Obtener estado del scheduler de backups automáticos
+app.get('/api/backups/scheduler/status', authenticateToken, requireRole(['admin', 'owner']), async (req, res) => {
+  try {
+    const status = getSchedulerStatus();
+    
+    res.json({
+      success: true,
+      scheduler: status
+    });
+  } catch (error) {
+    console.error('❌ Error obteniendo estado del scheduler:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error obteniendo estado del scheduler'
+    });
+  }
+});
+
+// Reiniciar scheduler de backups automáticos
+app.post('/api/backups/scheduler/restart', authenticateToken, requireRole(['admin', 'owner']), sensitiveOperationsRateLimiter, async (req, res) => {
+  try {
+    await initializeBackupScheduler();
+    
+    console.log(`🔄 Scheduler de backups reiniciado por ${req.user.username}`);
+    
+    res.json({
+      success: true,
+      message: 'Scheduler de backups reiniciado exitosamente'
+    });
+  } catch (error) {
+    console.error('❌ Error reiniciando scheduler:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error reiniciando scheduler de backups'
     });
   }
 });
@@ -3418,6 +3457,14 @@ app.listen(PORT, async () => {
   console.log(`📊 Dashboard API available at http://localhost:${PORT}`);
   console.log(`🔗 PostgreSQL Host: ${process.env.DB_HOST}`);
   console.log(`✅ Health check: http://localhost:${PORT}/health`);
+  
+  // Inicializar sistema de backups automáticos
+  try {
+    await initializeBackupScheduler();
+    console.log('✅ Sistema de backups automáticos iniciado');
+  } catch (error) {
+    console.error('❌ Error iniciando sistema de backups automáticos:', error);
+  }
   
   // Log centralizado de inicio del sistema
   await logOperations.systemStarted({
