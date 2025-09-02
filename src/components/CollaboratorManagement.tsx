@@ -340,7 +340,9 @@ const CollaboratorManagement: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Comisiones Mes USD</p>
-                  <p className="text-2xl font-bold text-gray-900">$3,751</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    ${collaborators.reduce((sum, collab) => sum + (collab.totalCommissionUsd || 0), 0).toFixed(2)}
+                  </p>
                 </div>
                 <DollarSign className="w-8 h-8 text-green-500" />
               </div>
@@ -350,7 +352,13 @@ const CollaboratorManagement: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Promedio por Transacción</p>
-                  <p className="text-2xl font-bold text-gray-900">$42.6</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    ${(() => {
+                      const totalTx = collaborators.reduce((sum, collab) => sum + (collab.txCount || 0), 0);
+                      const totalCommission = collaborators.reduce((sum, collab) => sum + (collab.totalCommissionUsd || 0), 0);
+                      return totalTx > 0 ? (totalCommission / totalTx).toFixed(1) : '0.0';
+                    })()}
+                  </p>
                 </div>
                 <TrendingUp className="w-8 h-8 text-purple-500" />
               </div>
@@ -360,8 +368,18 @@ const CollaboratorManagement: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Más Productivo</p>
-                  <p className="text-lg font-bold text-gray-900">Gabriel</p>
-                  <p className="text-sm text-gray-500">45 transacciones</p>
+                  {(() => {
+                    const mostProductive = collaborators.reduce((max, collab) => 
+                      (collab.txCount || 0) > (max.txCount || 0) ? collab : max, 
+                      collaborators[0] || { name: 'N/A', txCount: 0 }
+                    );
+                    return (
+                      <>
+                        <p className="text-lg font-bold text-gray-900">{mostProductive.name}</p>
+                        <p className="text-sm text-gray-500">{mostProductive.txCount || 0} transacciones</p>
+                      </>
+                    );
+                  })()}
                 </div>
                 <TrendingUp className="w-8 h-8 text-orange-500" />
               </div>

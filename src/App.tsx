@@ -345,11 +345,10 @@ function App() {
               
               <button
                 onClick={clearCacheAndReload}
-                className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors duration-200"
+                className="flex items-center px-2 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md transition-colors duration-200 text-xs"
                 title="Limpiar caché y recargar - Útil si no ves los cambios más recientes"
               >
-                <Trash2 className="w-4 h-4" />
-                <span className="hidden sm:block">Limpiar Caché</span>
+                <Trash2 className="w-3 h-3" />
               </button>
               
               <button
