@@ -33,10 +33,17 @@ const MAIN_TABLES = [
 // Configuración de backup
 const BACKUP_CONFIG = {
   maxBackups: 50, // Máximo número de backups a mantener
-  backupDir: path.join(__dirname, '../backups'),
+  backupDir: process.env.BACKUP_DIR || path.join(path.dirname(__filename), '../backups'),
   compressionEnabled: true,
   retentionDays: 90 // Días para mantener backups
 };
+
+// Asegurar que la ruta de backups sea absoluta y correcta
+if (!path.isAbsolute(BACKUP_CONFIG.backupDir)) {
+  BACKUP_CONFIG.backupDir = path.resolve(BACKUP_CONFIG.backupDir);
+}
+
+console.log(`📁 Directorio de backups configurado: ${BACKUP_CONFIG.backupDir}`);
 
 /**
  * Clase principal del sistema de backup

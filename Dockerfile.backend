@@ -27,13 +27,19 @@ COPY server/ .
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
+# Crear directorio de backups
+RUN mkdir -p /app/backups
+
 # Crear usuario no-root para seguridad
 RUN addgroup -g 1001 -S nodejs
 RUN adduser -S nodejs -u 1001
 
-# Cambiar propiedad de archivos
+# Cambiar propiedad de archivos incluyendo directorio de backups
 RUN chown -R nodejs:nodejs /app
 USER nodejs
+
+# Configurar variable de entorno para directorio de backups
+ENV BACKUP_DIR=/app/backups
 
 # Exponer puerto (EasyPanel lo asignará automáticamente)
 EXPOSE 3001
