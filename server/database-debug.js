@@ -399,7 +399,7 @@ export class TransactionDebugger {
 
       const hasPermission = 
         transaction && 
-        transaction.age_hours < 168 && // Menos de una semana
+        transaction.age_hours < 8760 && // Menos de un año (más flexible)
         parseInt(dependencies.dependent_count) === 0; // Sin dependencias
 
       return {
@@ -415,9 +415,9 @@ export class TransactionDebugger {
           hasBlocking: parseInt(dependencies.dependent_count) > 0
         },
         validationRules: {
-          maxAgeHours: 168,
+          maxAgeHours: 8760, // Un año
           allowDependencies: false,
-          requiresApproval: transaction ? transaction.age_hours > 24 : true
+          requiresApproval: transaction ? transaction.age_hours > 168 : true // Requiere aprobación después de una semana
         },
         checkTime: new Date().toISOString()
       };
