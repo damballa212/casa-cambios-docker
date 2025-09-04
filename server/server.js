@@ -2016,51 +2016,6 @@ app.post('/api/transactions', authenticateToken, requireRole(['admin', 'owner'])
 });
 
 // Eliminar transacción con debugging profesional
-// Endpoint temporal simplificado para eliminación de transacciones
-app.delete('/api/transactions/:id/simple', authenticateToken, requireRole(['admin', 'owner']), async (req, res) => {
-  try {
-    if (!supabase) {
-      throw new Error('Supabase client not initialized');
-    }
-    
-    const { id } = req.params;
-    const userId = req.user?.username || 'unknown';
-    
-    console.log(`🗑️ Eliminación simple de transacción ${id} por ${userId}`);
-    
-    // Eliminar directamente sin debugging
-    const { error } = await supabase
-      .from('transactions')
-      .delete()
-      .eq('id', id);
-    
-    if (error) {
-      console.error('❌ Error eliminando transacción:', error);
-      return res.status(500).json({
-        success: false,
-        error: 'Error eliminando transacción',
-        details: error.message
-      });
-    }
-    
-    console.log(`✅ Transacción ${id} eliminada exitosamente`);
-    
-    res.json({
-      success: true,
-      message: 'Transacción eliminada exitosamente',
-      transactionId: id
-    });
-    
-  } catch (error) {
-    console.error('❌ Error en eliminación simple:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Error interno del servidor',
-      details: error.message
-    });
-  }
-});
-
 app.delete('/api/transactions/:id', authenticateToken, requireRole(['admin', 'owner']), async (req, res) => {
   // Importar el debugger dinámicamente para evitar problemas de inicialización
   const { debugTransactionDeletion, transactionDebugger } = await import('./database-debug.js');
