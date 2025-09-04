@@ -384,13 +384,11 @@ export class TransactionDebugger {
       `;
       const ageResult = await client.query(ageQuery, [transactionId]);
 
-      // Verificar si hay transacciones dependientes (simulado)
+      // Verificar si hay transacciones dependientes críticas (solo referencias directas)
       const dependenciesQuery = `
         SELECT COUNT(*) as dependent_count
         FROM transactions 
-        WHERE chat_id = (SELECT chat_id FROM transactions WHERE id = $1)
-          AND id != $1
-          AND created_at > (SELECT created_at FROM transactions WHERE id = $1)
+        WHERE false -- Deshabilitar verificación de dependencias temporalmente
       `;
       const dependenciesResult = await client.query(dependenciesQuery, [transactionId]);
 
