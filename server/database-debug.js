@@ -390,7 +390,7 @@ export class TransactionDebugger {
         FROM transactions 
         WHERE false -- Deshabilitar verificación de dependencias temporalmente
       `;
-      const dependenciesResult = await client.query(dependenciesQuery, [transactionId]);
+      const dependenciesResult = await client.query(dependenciesQuery); // Sin parámetros porque WHERE false no los necesita
 
       const transaction = ageResult.rows[0];
       const dependencies = dependenciesResult.rows[0];
