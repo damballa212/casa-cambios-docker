@@ -248,6 +248,7 @@ const ExportModal: React.FC<ExportModalProps> = ({
     switch (preset) {
       case 'today':
         start = today;
+        end = today;
         break;
       case 'yesterday':
         start = new Date(today.getTime() - 24 * 60 * 60 * 1000);
@@ -255,15 +256,19 @@ const ExportModal: React.FC<ExportModalProps> = ({
         break;
       case 'last7days':
         start = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+        end = today;
         break;
       case 'last30days':
         start = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+        end = today;
         break;
       case 'last90days':
         start = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+        end = today;
         break;
       case 'thismonth':
         start = new Date(today.getFullYear(), today.getMonth(), 1);
+        end = today;
         break;
       case 'lastmonth':
         start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
@@ -271,6 +276,7 @@ const ExportModal: React.FC<ExportModalProps> = ({
         break;
       case 'thisyear':
         start = new Date(today.getFullYear(), 0, 1);
+        end = today;
         break;
       case 'custom':
         return; // No cambiar las fechas para rango personalizado
