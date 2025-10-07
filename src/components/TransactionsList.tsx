@@ -296,8 +296,21 @@ const TransactionsList: React.FC = () => {
   };
 
   // Función para aplicar filtros adicionales del modal de exportación
-  const applyExportFilters = (data: Transaction[], filters: any) => {
+  const applyExportFilters = (data: Transaction[], filters: any, dateRange?: { start: string; end: string }) => {
     let filtered = [...data];
+    
+    // Aplicar filtro de fechas si está especificado
+    if (dateRange && dateRange.start && dateRange.end) {
+      const startDate = new Date(dateRange.start);
+      const endDate = new Date(dateRange.end);
+      // Ajustar la fecha de fin para incluir todo el día
+      endDate.setHours(23, 59, 59, 999);
+      
+      filtered = filtered.filter(transaction => {
+        const transactionDate = new Date(transaction.fecha);
+        return transactionDate >= startDate && transactionDate <= endDate;
+      });
+    }
     
     // Aplicar filtro de colaborador si está especificado
     if (filters.collaborator) {
@@ -334,8 +347,9 @@ const TransactionsList: React.FC = () => {
       console.log('Exportando con configuración:', config);
       
       // Aplicar filtros adicionales del modal a los datos ya filtrados
-      const dataToExport = applyExportFilters(filteredTransactions, config.filters || {});
+      const dataToExport = applyExportFilters(filteredTransactions, config.filters || {}, config.dateRange);
       console.log(`Exportando ${dataToExport.length} transacciones de ${filteredTransactions.length} filtradas`);
+      console.log('Filtros aplicados:', { filters: config.filters, dateRange: config.dateRange });
       
       // Simular delay
       await new Promise(resolve => setTimeout(resolve, 2000));
