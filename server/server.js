@@ -53,7 +53,7 @@ const PORT = process.env.PORT || 3001;
 
 // Configurar middlewares básicos ANTES de las rutas
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000'],
+  origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:4173'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -2785,11 +2785,25 @@ app.get('/api/reports/summary', async (req, res) => {
       throw new Error('Supabase client not initialized');
     }
 
+    // Obtener parámetros de filtro de fecha
+    const { startDate, endDate } = req.query;
+    console.log('📅 Filtros de fecha recibidos:', { startDate, endDate });
+
     // Obtener todas las transacciones para calcular estadísticas
     console.log('📊 Obteniendo transacciones de Supabase...');
-    const { data: transactions, error: txError } = await supabase
-      .from('transactions')
-      .select('*');
+    let query = supabase.from('transactions').select('*');
+    
+    // Aplicar filtros de fecha si se proporcionan
+    if (startDate) {
+      query = query.gte('fecha', startDate);
+      console.log('📅 Aplicando filtro desde:', startDate);
+    }
+    if (endDate) {
+      query = query.lte('fecha', endDate);
+      console.log('📅 Aplicando filtro hasta:', endDate);
+    }
+    
+    const { data: transactions, error: txError } = await query;
     
     if (txError) {
       console.error('❌ Error obteniendo transacciones:', txError);

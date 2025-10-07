@@ -55,12 +55,59 @@ const ReportsAnalytics: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
+  // Función para calcular fechas basadas en el rango seleccionado
+  const getDateRange = (range: string) => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    switch (range) {
+      case 'last7days':
+        const last7Days = new Date(today);
+        last7Days.setDate(today.getDate() - 7);
+        return {
+          startDate: last7Days.toISOString().split('T')[0],
+          endDate: today.toISOString().split('T')[0]
+        };
+      case 'last30days':
+        const last30Days = new Date(today);
+        last30Days.setDate(today.getDate() - 30);
+        return {
+          startDate: last30Days.toISOString().split('T')[0],
+          endDate: today.toISOString().split('T')[0]
+        };
+      case 'last90days':
+        const last90Days = new Date(today);
+        last90Days.setDate(today.getDate() - 90);
+        return {
+          startDate: last90Days.toISOString().split('T')[0],
+          endDate: today.toISOString().split('T')[0]
+        };
+      case 'thismonth':
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        return {
+          startDate: startOfMonth.toISOString().split('T')[0],
+          endDate: today.toISOString().split('T')[0]
+        };
+      case 'thisyear':
+        const startOfYear = new Date(now.getFullYear(), 0, 1);
+        return {
+          startDate: startOfYear.toISOString().split('T')[0],
+          endDate: today.toISOString().split('T')[0]
+        };
+      default:
+        return { startDate: undefined, endDate: undefined };
+    }
+  };
+
   // Cargar datos de reportes desde el API
   useEffect(() => {
     const fetchReportsData = async () => {
       try {
         setLoading(true);
-        const data = await apiService.getReportsSummary();
+        const { startDate, endDate } = getDateRange(dateRange);
+        console.log('🔍 Aplicando filtro de fechas:', { dateRange, startDate, endDate });
+        
+        const data = await apiService.getReportsSummary(startDate, endDate);
         setSummaryData(data as any);
         setError(null);
       } catch (err) {
@@ -913,6 +960,7 @@ const ReportsAnalytics: React.FC = () => {
             <option value="last7days">Últimos 7 días</option>
             <option value="last30days">Últimos 30 días</option>
             <option value="last90days">Últimos 90 días</option>
+            <option value="thismonth">Este mes</option>
             <option value="thisyear">Este año</option>
           </select>
           <button 
@@ -1012,39 +1060,47 @@ const ReportsAnalytics: React.FC = () => {
           <div>
             <h3 className="text-lg font-semibold text-gray-800 mb-4">Volumen de Transacciones</h3>
             <div className="space-y-3">
-              {monthlyData.map((month, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 w-12">{month.month}</span>
-                  <div className="flex-1 mx-4">
-                    <div className="bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-500"
-                        style={{ width: `${(month.transactions / 220) * 100}%` }}
-                      ></div>
+              {monthlyData.map((month, index) => {
+                const maxTransactions = Math.max(...monthlyData.map(m => m.transactions));
+                const percentage = maxTransactions > 0 ? (month.transactions / maxTransactions) * 100 : 0;
+                return (
+                  <div key={index} className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600 w-12">{month.month}</span>
+                    <div className="flex-1 mx-4">
+                      <div className="bg-gray-200 rounded-full h-2 overflow-hidden">
+                        <div 
+                          className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-500"
+                          style={{ width: `${Math.min(percentage, 100)}%` }}
+                        ></div>
+                      </div>
                     </div>
+                    <span className="text-sm font-medium text-gray-900 w-12 text-right">{month.transactions}</span>
                   </div>
-                  <span className="text-sm font-medium text-gray-900 w-12 text-right">{month.transactions}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
           <div>
             <h3 className="text-lg font-semibold text-gray-800 mb-4">Volumen USD</h3>
             <div className="space-y-3">
-              {monthlyData.map((month, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 w-12">{month.month}</span>
-                  <div className="flex-1 mx-4">
-                    <div className="bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-gradient-to-r from-green-500 to-blue-500 h-2 rounded-full transition-all duration-500"
-                        style={{ width: `${(month.volume / 60000) * 100}%` }}
-                      ></div>
+              {monthlyData.map((month, index) => {
+                const maxVolume = Math.max(...monthlyData.map(m => m.volume));
+                const percentage = maxVolume > 0 ? (month.volume / maxVolume) * 100 : 0;
+                return (
+                  <div key={index} className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600 w-12">{month.month}</span>
+                    <div className="flex-1 mx-4">
+                      <div className="bg-gray-200 rounded-full h-2 overflow-hidden">
+                        <div 
+                          className="bg-gradient-to-r from-green-500 to-blue-500 h-2 rounded-full transition-all duration-500"
+                          style={{ width: `${Math.min(percentage, 100)}%` }}
+                        ></div>
+                      </div>
                     </div>
+                    <span className="text-sm font-medium text-gray-900 w-16 text-right">${month.volume.toFixed(2)}</span>
                   </div>
-                  <span className="text-sm font-medium text-gray-900 w-16 text-right">${month.volume.toFixed(2)}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>

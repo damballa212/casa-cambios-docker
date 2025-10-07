@@ -415,8 +415,22 @@ class ApiService {
   }
 
   // Reportes y analíticas
-  async getReportsSummary(): Promise<ReportsSummary> {
-    return this.fetchApi<ReportsSummary>('/reports/summary');
+  async getReportsSummary(startDate?: string, endDate?: string): Promise<ReportsSummary> {
+    let url = '/reports/summary';
+    const params = new URLSearchParams();
+    
+    if (startDate) {
+      params.append('startDate', startDate);
+    }
+    if (endDate) {
+      params.append('endDate', endDate);
+    }
+    
+    if (params.toString()) {
+      url += `?${params.toString()}`;
+    }
+    
+    return this.fetchApi<ReportsSummary>(url);
   }
 
   // Actividad reciente
