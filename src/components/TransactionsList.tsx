@@ -301,36 +301,42 @@ const TransactionsList: React.FC = () => {
     
     // Aplicar filtro de fechas si está especificado
     if (dateRange && dateRange.start && dateRange.end) {
-      console.log('Aplicando filtro de fechas:', dateRange);
+      console.log('=== INICIO DEBUG FILTRO DE FECHAS ===');
+      console.log('Rango de fechas recibido:', dateRange);
       
-      // Crear fechas normalizadas para comparación (solo fecha, sin hora)
-      const startDate = new Date(dateRange.start + 'T00:00:00.000Z');
-      const endDate = new Date(dateRange.end + 'T23:59:59.999Z');
+      // Usar solo las fechas como strings para comparación directa (YYYY-MM-DD)
+      const startDateStr = dateRange.start;
+      const endDateStr = dateRange.end;
       
-      console.log('Rango de fechas calculado:', {
-        start: startDate.toISOString(),
-        end: endDate.toISOString()
+      console.log('Fechas para comparación:', {
+        start: startDateStr,
+        end: endDateStr
       });
       
+      console.log(`Total de transacciones antes del filtro: ${data.length}`);
+      
+      // Mostrar algunas fechas de transacciones para debug
+      console.log('Primeras 5 fechas de transacciones:', data.slice(0, 5).map(t => ({
+        fecha: t.fecha,
+        fechaSolo: t.fecha.split('T')[0]
+      })));
+      
       filtered = filtered.filter(transaction => {
-        // Normalizar la fecha de la transacción para comparación
-        const transactionDateStr = transaction.fecha.split('T')[0]; // Obtener solo la parte de fecha
-        const transactionDate = new Date(transactionDateStr + 'T12:00:00.000Z'); // Usar mediodía para evitar problemas de zona horaria
+        // Obtener solo la parte de fecha de la transacción (YYYY-MM-DD)
+        const transactionDateStr = transaction.fecha.split('T')[0];
         
-        const isInRange = transactionDate >= startDate && transactionDate <= endDate;
+        // Comparar directamente las fechas como strings (YYYY-MM-DD)
+        const isInRange = transactionDateStr >= startDateStr && transactionDateStr <= endDateStr;
         
         if (!isInRange) {
-          console.log('Transacción filtrada:', {
-            fecha: transaction.fecha,
-            fechaNormalizada: transactionDate.toISOString(),
-            enRango: isInRange
-          });
+          console.log(`Transacción excluida: ${transactionDateStr} no está entre ${startDateStr} y ${endDateStr}`);
         }
         
         return isInRange;
       });
       
-      console.log(`Filtrado por fechas: ${filtered.length} de ${data.length} transacciones`);
+      console.log(`Transacciones después del filtro: ${filtered.length}`);
+      console.log('=== FIN DEBUG FILTRO DE FECHAS ===');
     }
     
     // Aplicar filtro de colaborador si está especificado
