@@ -301,15 +301,36 @@ const TransactionsList: React.FC = () => {
     
     // Aplicar filtro de fechas si está especificado
     if (dateRange && dateRange.start && dateRange.end) {
-      const startDate = new Date(dateRange.start);
-      const endDate = new Date(dateRange.end);
-      // Ajustar la fecha de fin para incluir todo el día
-      endDate.setHours(23, 59, 59, 999);
+      console.log('Aplicando filtro de fechas:', dateRange);
+      
+      // Crear fechas normalizadas para comparación (solo fecha, sin hora)
+      const startDate = new Date(dateRange.start + 'T00:00:00.000Z');
+      const endDate = new Date(dateRange.end + 'T23:59:59.999Z');
+      
+      console.log('Rango de fechas calculado:', {
+        start: startDate.toISOString(),
+        end: endDate.toISOString()
+      });
       
       filtered = filtered.filter(transaction => {
-        const transactionDate = new Date(transaction.fecha);
-        return transactionDate >= startDate && transactionDate <= endDate;
+        // Normalizar la fecha de la transacción para comparación
+        const transactionDateStr = transaction.fecha.split('T')[0]; // Obtener solo la parte de fecha
+        const transactionDate = new Date(transactionDateStr + 'T12:00:00.000Z'); // Usar mediodía para evitar problemas de zona horaria
+        
+        const isInRange = transactionDate >= startDate && transactionDate <= endDate;
+        
+        if (!isInRange) {
+          console.log('Transacción filtrada:', {
+            fecha: transaction.fecha,
+            fechaNormalizada: transactionDate.toISOString(),
+            enRango: isInRange
+          });
+        }
+        
+        return isInRange;
       });
+      
+      console.log(`Filtrado por fechas: ${filtered.length} de ${data.length} transacciones`);
     }
     
     // Aplicar filtro de colaborador si está especificado
