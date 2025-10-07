@@ -222,9 +222,9 @@ const ExportModal: React.FC<ExportModalProps> = ({
     dataType,
     format: 'excel',
     dateRange: {
-      start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
       end: new Date().toISOString().split('T')[0],
-      preset: 'last30days'
+      preset: 'thismonth'
     },
     filters: {},
     fields: config.defaultFields,

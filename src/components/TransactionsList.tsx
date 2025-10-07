@@ -297,29 +297,30 @@ const TransactionsList: React.FC = () => {
 
   // Función para aplicar filtros adicionales del modal de exportación
   const applyExportFilters = (data: Transaction[], filters: any, dateRange?: { start: string; end: string }) => {
+    console.log('🔍 INICIO applyExportFilters - Total transacciones recibidas:', data.length);
     let filtered = [...data];
     
     // Aplicar filtro de fechas si está especificado
     if (dateRange && dateRange.start && dateRange.end) {
-      console.log('=== INICIO DEBUG FILTRO DE FECHAS ===');
-      console.log('Rango de fechas recibido:', dateRange);
-      
       // Usar solo las fechas como strings para comparación directa (YYYY-MM-DD)
       const startDateStr = dateRange.start;
       const endDateStr = dateRange.end;
       
-      console.log('Fechas para comparación:', {
-        start: startDateStr,
-        end: endDateStr
-      });
+      console.log('🔍 DEBUG FILTRO FECHAS:');
+      console.log('Rango de fechas:', { start: startDateStr, end: endDateStr });
+      console.log('Transacciones ANTES del filtro de fechas:', filtered.length);
       
-      console.log(`Total de transacciones antes del filtro: ${data.length}`);
+      // Contar transacciones del 30/9 ANTES del filtro
+      const sept30Before = filtered.filter(t => t.fecha.split('T')[0] === '2025-09-30').length;
+      console.log('🔍 Transacciones del 30/9 ANTES del filtro:', sept30Before);
       
-      // Mostrar algunas fechas de transacciones para debug
-      console.log('Primeras 5 fechas de transacciones:', data.slice(0, 5).map(t => ({
-        fecha: t.fecha,
-        fechaSolo: t.fecha.split('T')[0]
-      })));
+      // DEPURACIÓN CRÍTICA: Verificar el rango de fechas
+      console.log('🔍 DEPURACIÓN CRÍTICA DEL RANGO:');
+      console.log('startDateStr:', startDateStr, 'tipo:', typeof startDateStr);
+      console.log('endDateStr:', endDateStr, 'tipo:', typeof endDateStr);
+      console.log('Comparación 2025-09-30 >= startDateStr:', '2025-09-30' >= startDateStr);
+      console.log('Comparación 2025-09-30 <= endDateStr:', '2025-09-30' <= endDateStr);
+      console.log('Resultado lógico para 2025-09-30:', ('2025-09-30' >= startDateStr && '2025-09-30' <= endDateStr));
       
       filtered = filtered.filter(transaction => {
         // Obtener solo la parte de fecha de la transacción (YYYY-MM-DD)
@@ -328,15 +329,38 @@ const TransactionsList: React.FC = () => {
         // Comparar directamente las fechas como strings (YYYY-MM-DD)
         const isInRange = transactionDateStr >= startDateStr && transactionDateStr <= endDateStr;
         
-        if (!isInRange) {
-          console.log(`Transacción excluida: ${transactionDateStr} no está entre ${startDateStr} y ${endDateStr}`);
+        // Log específico para transacciones del 30/9/2025
+        if (transactionDateStr === '2025-09-30') {
+          console.log('🚨 TRANSACCIÓN 30/9/2025 ENCONTRADA:');
+          console.log('Cliente:', transaction.cliente);
+          console.log('Colaborador:', transaction.colaborador);
+          console.log('Fecha completa:', transaction.fecha);
+          console.log('Fecha extraída:', transactionDateStr);
+          console.log('¿Está en rango?', isInRange);
+          console.log('Comparación:', `${transactionDateStr} >= ${startDateStr}:`, transactionDateStr >= startDateStr);
+          console.log('Comparación:', `${transactionDateStr} <= ${endDateStr}:`, transactionDateStr <= endDateStr);
+          console.log('🔍 RESULTADO DEL FILTRO:', isInRange ? 'INCLUIDA' : 'EXCLUIDA');
         }
         
+        // IMPORTANTE: Solo incluir transacciones que están EN RANGO
+        // Si isInRange es false, la transacción NO debe ser incluida
         return isInRange;
       });
       
-      console.log(`Transacciones después del filtro: ${filtered.length}`);
-      console.log('=== FIN DEBUG FILTRO DE FECHAS ===');
+      // Contar transacciones del 30/9 DESPUÉS del filtro
+      const sept30After = filtered.filter(t => t.fecha.split('T')[0] === '2025-09-30').length;
+      console.log('🔍 Transacciones del 30/9 DESPUÉS del filtro:', sept30After);
+      console.log('Total transacciones después del filtro de fechas:', filtered.length);
+      
+      if (sept30After > 0) {
+        console.log('❌ ERROR CRÍTICO: Las transacciones del 30/9 NO fueron filtradas correctamente!');
+        console.log('❌ Transacciones del 30/9 que pasaron el filtro:');
+        filtered.filter(t => t.fecha.split('T')[0] === '2025-09-30').forEach(t => {
+          console.log('❌ Cliente:', t.cliente, 'Fecha:', t.fecha);
+        });
+      } else {
+        console.log('✅ CORRECTO: Las transacciones del 30/9 fueron filtradas correctamente');
+      }
     }
     
     // Aplicar filtro de colaborador si está especificado
@@ -370,18 +394,54 @@ const TransactionsList: React.FC = () => {
   // Función para manejar la exportación
   const handleExport = async (config: ExportConfig) => {
     try {
-      // Simular proceso de exportación
-      console.log('Exportando con configuración:', config);
+      console.log('🚀 INICIANDO EXPORTACIÓN');
+      console.log('Config completa:', JSON.stringify(config, null, 2));
       
-      // Aplicar filtros adicionales del modal a los datos ya filtrados
-      const dataToExport = applyExportFilters(filteredTransactions, config.filters || {}, config.dateRange);
-      console.log(`Exportando ${dataToExport.length} transacciones de ${filteredTransactions.length} filtradas`);
-      console.log('Filtros aplicados:', { filters: config.filters, dateRange: config.dateRange });
+      // Si el modal de exportación tiene filtros de fecha específicos, usar todas las transacciones
+      // Si no tiene filtros de fecha, usar los datos ya filtrados de la tabla
+      let dataToExport: Transaction[];
+      
+      if (config.dateRange && config.dateRange.start && config.dateRange.end) {
+        // Si el modal tiene filtros de fecha, aplicarlos a todas las transacciones
+        console.log('🚀 EXPORTANDO CON FILTROS DE FECHA DEL MODAL');
+        console.log('Fechas del modal:', config.dateRange);
+        console.log('Fecha de hoy:', new Date().toISOString().split('T')[0]);
+        
+        console.log('🔍 ANTES DE applyExportFilters - Total transacciones:', transactions.length);
+        console.log('🔍 ANTES DE applyExportFilters - Sept 30 en transactions:', transactions.filter(t => t.fecha.includes('2025-09-30')).length);
+        
+        dataToExport = applyExportFilters(transactions, config.filters || {}, config.dateRange);
+        
+        console.log('🔍 DESPUÉS DE applyExportFilters - Total dataToExport:', dataToExport.length);
+        console.log('🔍 DESPUÉS DE applyExportFilters - Sept 30 en dataToExport:', dataToExport.filter(t => t.fecha.includes('2025-09-30')).length);
+      } else {
+        // Si no hay filtros de fecha en el modal, usar los datos ya filtrados y aplicar solo otros filtros
+        console.log('🚀 EXPORTANDO CON FILTROS PRINCIPALES DE LA TABLA');
+        dataToExport = applyExportFilters(filteredTransactions, config.filters || {});
+      }
+      
+      console.log('Total transacciones originales:', transactions.length);
+      console.log('Total transacciones filtradas en tabla:', filteredTransactions.length);
+      console.log('Total después de applyExportFilters:', dataToExport.length);
+      console.log('Config de exportación:', config);
+      
+      // Verificar si hay transacciones del 30/9 en los datos finales
+      const sept30Transactions = dataToExport.filter(t => t.fecha.startsWith('2025-09-30'));
+      if (sept30Transactions.length > 0) {
+        console.log('🚨 PROBLEMA: Transacciones del 30/9 en datos finales:', sept30Transactions.length);
+        sept30Transactions.forEach(t => {
+          console.log('- Cliente:', t.cliente, 'Fecha:', t.fecha);
+        });
+      } else {
+        console.log('✅ Correcto: No hay transacciones del 30/9 en datos finales');
+      }
       
       // Simular delay
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      const timestamp = new Date().toISOString().split('T')[0];
+      // Crear timestamp único con milisegundos para evitar caché
+      const now = new Date();
+      const timestamp = `${now.toISOString().split('T')[0]}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}${now.getSeconds().toString().padStart(2, '0')}_${now.getMilliseconds().toString().padStart(3, '0')}`;
       const baseFilename = config.customFilename || `transacciones_${timestamp}`;
       
       // Generar y descargar archivo según el formato
@@ -411,6 +471,16 @@ const TransactionsList: React.FC = () => {
           break;
           
         case 'pdf':
+            console.log('🔍 ANTES DE GENERAR PDF - Verificando datos finales:');
+            console.log('Total de transacciones:', dataToExport.length);
+            const sept30InFinalData = dataToExport.filter(t => t.fecha.includes('2025-09-30'));
+            if (sept30InFinalData.length > 0) {
+              console.log('❌ PROBLEMA CRÍTICO: Transacciones del 30/9 en datos finales para PDF:', sept30InFinalData.length);
+              console.log('❌ Detalles:', sept30InFinalData.map(t => ({ fecha: t.fecha, cliente: t.cliente })));
+            } else {
+              console.log('✅ CORRECTO: No hay transacciones del 30/9 en datos finales para PDF');
+            }
+            
             const pdfContent = generatePDF(dataToExport, config);
             downloadFile(pdfContent, `${baseFilename}.pdf`, 'application/pdf');
             break;
@@ -419,7 +489,6 @@ const TransactionsList: React.FC = () => {
           throw new Error(`Formato no soportado: ${config.format}`);
       }
       
-      console.log('Exportación completada');
     } catch (error) {
       console.error('Error en exportación:', error);
       throw error;
@@ -539,7 +608,15 @@ const TransactionsList: React.FC = () => {
       const infoData = [
         ['Generado:', new Date().toLocaleString('es-ES')],
         ['Total de registros:', data.length],
-        ['Período:', `${data.length > 0 ? new Date(data[data.length - 1].fecha).toLocaleDateString('es-ES') : 'N/A'} - ${data.length > 0 ? new Date(data[0].fecha).toLocaleDateString('es-ES') : 'N/A'}`]
+        ['Período:', `${data.length > 0 ? (() => {
+          const fechaISO = data[data.length - 1].fecha.split('T')[0];
+          const [year, month, day] = fechaISO.split('-');
+          return `${day}/${month}/${year}`;
+        })() : 'N/A'} - ${data.length > 0 ? (() => {
+          const fechaISO = data[0].fecha.split('T')[0];
+          const [year, month, day] = fechaISO.split('-');
+          return `${day}/${month}/${year}`;
+        })() : 'N/A'}`]
       ];
       
       infoData.forEach((info, index) => {
@@ -854,6 +931,26 @@ const TransactionsList: React.FC = () => {
 
   // Generar PDF real usando jsPDF
       const generatePDF = (data: Transaction[], config: ExportConfig) => {
+        // Debug: Verificar datos que llegan a generatePDF
+        console.log('🔍 generatePDF - Datos recibidos:', data.length);
+        console.log('🔍 generatePDF - Primeras 3 transacciones:', data.slice(0, 3).map(t => ({ fecha: t.fecha, cliente: t.cliente })));
+        
+        // Verificar si hay transacciones del 30/9 (formato correcto: 2025-09-30)
+        const sept30Transactions = data.filter(t => t.fecha.includes('2025-09-30'));
+        if (sept30Transactions.length > 0) {
+          console.log('❌ generatePDF - PROBLEMA: Transacciones del 30/9 encontradas:', sept30Transactions.length);
+          console.log('❌ generatePDF - Detalles:', sept30Transactions.map(t => ({ fecha: t.fecha, cliente: t.cliente })));
+        } else {
+          console.log('✅ generatePDF - Correcto: No hay transacciones del 30/9');
+        }
+        
+        // 🔍 LOGGING EXHAUSTIVO DEL CONTENIDO DEL PDF
+        console.log('📄 PDF CONTENT LOGGING - INICIO');
+        console.log('📄 Total de transacciones que se escribirán al PDF:', data.length);
+        console.log('📄 Todas las fechas que se escribirán al PDF:', data.map(t => t.fecha));
+        console.log('📄 Fechas únicas en el PDF:', [...new Set(data.map(t => t.fecha.split('T')[0]))]);
+        console.log('📄 Verificación final - Transacciones del 30/9 en data:', data.filter(t => t.fecha.includes('2025-09-30')).length);
+        
         const fieldMap = getFieldMap();
         const doc = new jsPDF();
         
@@ -982,6 +1079,15 @@ const TransactionsList: React.FC = () => {
         doc.setFontSize(8);
         
         data.forEach((transaction, index) => {
+          // 🔍 LOGGING DETALLADO DE CADA FILA DEL PDF
+          const fechaCompleta = transaction.fecha;
+          const fechaExtraida = fechaCompleta.split('T')[0];
+          console.log(`📄 FILA ${index + 1}/${data.length} - Cliente: ${transaction.cliente}, Fecha: ${fechaExtraida}`);
+          
+          if (fechaExtraida.includes('2025-09-30')) {
+            console.log(`🚨 CRÍTICO: FILA ${index + 1} CONTIENE FECHA 30/9 - Cliente: ${transaction.cliente}, Fecha completa: ${fechaCompleta}`);
+          }
+          
           // Verificar si necesitamos nueva página
           if (yPosition > 250) {
             doc.addPage();
@@ -1033,7 +1139,10 @@ const TransactionsList: React.FC = () => {
              
              // Formateo especial por tipo de campo
               if (field === 'fecha') {
-                displayValue = new Date(value).toLocaleDateString('es-ES');
+                // Extraer la fecha sin conversión de zona horaria para evitar problemas
+                const fechaISO = value.split('T')[0]; // Obtiene "2025-10-01" de "2025-10-01T19:58:52.51+00:00"
+                const [year, month, day] = fechaISO.split('-');
+                displayValue = `${day}/${month}/${year}`; // Formato dd/mm/yyyy
               } else if (field === 'usdTotal' || field === 'usdNeto' || field === 'gananciaGabriel' || field === 'gananciaColaborador') {
                 displayValue = `$${Number(value).toFixed(2)}`;
                 doc.setTextColor(22, 163, 74); // Verde para montos
@@ -1362,7 +1471,11 @@ const TransactionsList: React.FC = () => {
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <span className="text-gray-500">Fecha:</span>
-                    <div className="font-medium">{new Date(transaction.fecha).toLocaleDateString()}</div>
+                    <div className="font-medium">{(() => {
+                      const fechaISO = transaction.fecha.split('T')[0];
+                      const [year, month, day] = fechaISO.split('-');
+                      return `${day}/${month}/${year}`;
+                    })()}</div>
                   </div>
                   <div>
                     <span className="text-gray-500">Colaborador:</span>
