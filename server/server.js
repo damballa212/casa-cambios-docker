@@ -1762,19 +1762,191 @@ app.get('/api/transactions', async (req, res) => {
     if (!supabase) {
       throw new Error('Supabase client not initialized');
     }
-    
-    // Obtener todas las transacciones de Supabase
-    const { data: transactions, error } = await supabase
+
+    // Parámetros de filtro desde query
+    const {
+      start,
+      end,
+      preset,
+      collaborator,
+      client,
+      status,
+      search,
+      minUsd,
+      maxUsd,
+      minGs,
+      maxGs,
+      minCommission,
+      maxCommission,
+      minRate,
+      maxRate
+    } = req.query;
+
+    // Helper para calcular rangos de fechas a partir de presets
+    const computeDateRange = (presetName) => {
+      const now = new Date();
+      const toISOStart = (d) => new Date(d.setHours(0, 0, 0, 0)).toISOString();
+      const toISOEnd = (d) => new Date(d.setHours(23, 59, 59, 999)).toISOString();
+
+      const startEnd = { start: null, end: null };
+
+      switch (presetName) {
+        case 'today': {
+          const d = new Date(now);
+          startEnd.start = toISOStart(new Date(d));
+          startEnd.end = toISOEnd(new Date(d));
+          break;
+        }
+        case 'last_7d': {
+          const endD = new Date(now);
+          const startD = new Date(now);
+          startD.setDate(startD.getDate() - 7);
+          startEnd.start = toISOStart(startD);
+          startEnd.end = toISOEnd(endD);
+          break;
+        }
+        case 'last_30d': {
+          const endD = new Date(now);
+          const startD = new Date(now);
+          startD.setDate(startD.getDate() - 30);
+          startEnd.start = toISOStart(startD);
+          startEnd.end = toISOEnd(endD);
+          break;
+        }
+        case 'last_90d': {
+          const endD = new Date(now);
+          const startD = new Date(now);
+          startD.setDate(startD.getDate() - 90);
+          startEnd.start = toISOStart(startD);
+          startEnd.end = toISOEnd(endD);
+          break;
+        }
+        case 'this_month': {
+          const startD = new Date(now.getFullYear(), now.getMonth(), 1);
+          const endD = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+          startEnd.start = toISOStart(startD);
+          startEnd.end = toISOEnd(endD);
+          break;
+        }
+        case 'last_month': {
+          const startD = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          const endD = new Date(now.getFullYear(), now.getMonth(), 0);
+          startEnd.start = toISOStart(startD);
+          startEnd.end = toISOEnd(endD);
+          break;
+        }
+        default:
+          return { start: null, end: null };
+      }
+      return startEnd;
+    };
+
+    // Construir query de Supabase
+    let query = supabase
       .from('transactions')
-      .select('*')
-      .order('fecha', { ascending: false });
-    
+      .select('*');
+
+    // Rango de fechas
+    let startISO = null;
+    let endISO = null;
+
+    if (preset) {
+      const range = computeDateRange(String(preset));
+      startISO = range.start;
+      endISO = range.end;
+    }
+
+    if (start) {
+      // Si viene como YYYY-MM-DD, convertir a inicio del día en UTC
+      const s = typeof start === 'string' && start.length === 10
+        ? new Date(`${start}T00:00:00.000Z`).toISOString()
+        : new Date(start).toISOString();
+      startISO = s;
+    }
+    if (end) {
+      const e = typeof end === 'string' && end.length === 10
+        ? new Date(`${end}T23:59:59.999Z`).toISOString()
+        : new Date(end).toISOString();
+      endISO = e;
+    }
+
+    if (startISO) {
+      query = query.gte('fecha', startISO);
+    }
+    if (endISO) {
+      query = query.lte('fecha', endISO);
+    }
+
+    // Filtros simples
+    if (collaborator) {
+      query = query.eq('colaborador', collaborator);
+    }
+    if (client) {
+      query = query.eq('cliente', client);
+    }
+    if (status) {
+      query = query.eq('status', status);
+    }
+
+    // Rango de montos USD
+    if (minUsd) {
+      const v = parseFloat(minUsd);
+      if (!isNaN(v)) query = query.gte('usd_total', v);
+    }
+    if (maxUsd) {
+      const v = parseFloat(maxUsd);
+      if (!isNaN(v)) query = query.lte('usd_total', v);
+    }
+
+    // Rango de montos Gs
+    if (minGs) {
+      const v = parseFloat(minGs);
+      if (!isNaN(v)) query = query.gte('monto_gs', v);
+    }
+    if (maxGs) {
+      const v = parseFloat(maxGs);
+      if (!isNaN(v)) query = query.lte('monto_gs', v);
+    }
+
+    // Rango de comisión (%)
+    if (minCommission) {
+      const v = parseFloat(minCommission);
+      if (!isNaN(v)) query = query.gte('comision', v);
+    }
+    if (maxCommission) {
+      const v = parseFloat(maxCommission);
+      if (!isNaN(v)) query = query.lte('comision', v);
+    }
+
+    // Rango de tasa usada
+    if (minRate) {
+      const v = parseFloat(minRate);
+      if (!isNaN(v)) query = query.gte('tasa_usada', v);
+    }
+    if (maxRate) {
+      const v = parseFloat(maxRate);
+      if (!isNaN(v)) query = query.lte('tasa_usada', v);
+    }
+
+    // Búsqueda básica en cliente/colaborador/chat
+    if (search && typeof search === 'string' && search.trim()) {
+      const term = search.trim();
+      // PostgREST or() para múltiples columnas
+      query = query.or(`cliente.ilike.%${term}%,colaborador.ilike.%${term}%,chat_id.ilike.%${term}%`);
+    }
+
+    // Ordenar por fecha descendente
+    query = query.order('fecha', { ascending: false });
+
+    // Ejecutar consulta
+    const { data: transactions, error } = await query;
+
     if (error) {
       throw error;
     }
-    
+
     // Formatear las transacciones para el frontend
-    const formattedTransactions = transactions.map(tx => ({
+    const formattedTransactions = (transactions || []).map(tx => ({
       id: tx.id || `TXN-${tx.transaction_id || Math.random().toString(36).substr(2, 9)}`,
       fecha: tx.fecha || tx.created_at,
       cliente: tx.cliente || tx.client_name || 'Cliente Desconocido',
@@ -1790,7 +1962,7 @@ app.get('/api/transactions', async (req, res) => {
       montoColaboradorUsd: parseFloat(tx.monto_colaborador_usd) || 0,
       montoComisionGabrielUsd: parseFloat(tx.monto_comision_gabriel_usd) || 0
     }));
-    
+
     res.json(formattedTransactions);
   } catch (error) {
     console.error('Error fetching transactions:', error);

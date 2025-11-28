@@ -30,7 +30,7 @@ services:
       - DB_PASSWORD
       - JWT_SECRET
       - JWT_EXPIRES_IN=24h
-      - REDIS_HOST
+      - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD
       - RATE_LIMIT_WINDOW_MS=60000

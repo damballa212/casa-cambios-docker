@@ -279,8 +279,35 @@ class ApiService {
   }
 
   // Transacciones
-  async getTransactions(): Promise<Transaction[]> {
-    return this.fetchApi<Transaction[]>('/transactions');
+  async getTransactions(params?: {
+    start?: string;
+    end?: string;
+    preset?: 'today' | 'last_7d' | 'last_30d' | 'last_90d' | 'this_month' | 'last_month';
+    collaborator?: string;
+    client?: string;
+    status?: string;
+    search?: string;
+    minUsd?: number;
+    maxUsd?: number;
+    minGs?: number;
+    maxGs?: number;
+    minCommission?: number;
+    maxCommission?: number;
+    minRate?: number;
+    maxRate?: number;
+  }): Promise<Transaction[]> {
+    const qs = (() => {
+      if (!params) return '';
+      const s = new URLSearchParams();
+      Object.entries(params).forEach(([key, value]) => {
+        if (value === undefined || value === null || value === '') return;
+        s.append(key, String(value));
+      });
+      const str = s.toString();
+      return str ? `?${str}` : '';
+    })();
+
+    return this.fetchApi<Transaction[]>(`/transactions${qs}`);
   }
 
   async createTransaction(transactionData: CreateTransactionRequest): Promise<{
@@ -1279,7 +1306,7 @@ export const apiService = new ApiService();
 export const useApi = () => {
   return {
     getDashboardMetrics: () => apiService.getDashboardMetrics(),
-    getTransactions: () => apiService.getTransactions(),
+    getTransactions: (params?: Parameters<typeof apiService.getTransactions>[0]) => apiService.getTransactions(params),
     getCollaborators: () => apiService.getCollaborators(),
     getCurrentRate: () => apiService.getCurrentRate(),
     getRateHistory: () => apiService.getRateHistory(),

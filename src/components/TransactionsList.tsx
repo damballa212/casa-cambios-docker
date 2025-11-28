@@ -402,18 +402,33 @@ const TransactionsList: React.FC = () => {
       let dataToExport: Transaction[];
       
       if (config.dateRange && config.dateRange.start && config.dateRange.end) {
-        // Si el modal tiene filtros de fecha, aplicarlos a todas las transacciones
-        console.log('🚀 EXPORTANDO CON FILTROS DE FECHA DEL MODAL');
+        // Usar API con filtros de fecha para evitar inconsistencias locales
+        console.log('🚀 EXPORTANDO CON FILTROS DE FECHA DEL MODAL (server-side)');
         console.log('Fechas del modal:', config.dateRange);
         console.log('Fecha de hoy:', new Date().toISOString().split('T')[0]);
-        
-        console.log('🔍 ANTES DE applyExportFilters - Total transacciones:', transactions.length);
-        console.log('🔍 ANTES DE applyExportFilters - Sept 30 en transactions:', transactions.filter(t => t.fecha.includes('2025-09-30')).length);
-        
-        dataToExport = applyExportFilters(transactions, config.filters || {}, config.dateRange);
-        
-        console.log('🔍 DESPUÉS DE applyExportFilters - Total dataToExport:', dataToExport.length);
-        console.log('🔍 DESPUÉS DE applyExportFilters - Sept 30 en dataToExport:', dataToExport.filter(t => t.fecha.includes('2025-09-30')).length);
+
+        const serverFiltered = await apiService.getTransactions({
+          start: config.dateRange.start,
+          end: config.dateRange.end,
+          collaborator: config.filters?.collaborator,
+          client: config.filters?.client,
+          status: config.filters?.status,
+          minUsd: config.filters?.minAmount,
+          maxUsd: config.filters?.maxAmount,
+        });
+
+        // Asegurar campos de ganancia calculados antes de exportar
+        dataToExport = serverFiltered.map((transaction: Transaction) => {
+          const comisionTotal = transaction.usdTotal * (transaction.comision / 100);
+          return {
+            ...transaction,
+            gananciaGabriel: comisionTotal * 0.5,
+            gananciaColaborador: comisionTotal * 0.5
+          } as Transaction;
+        });
+
+        console.log('🔍 DESPUÉS DE consulta server-side - Total dataToExport:', dataToExport.length);
+        console.log('🔍 DESPUÉS de server-side - Sept 30 en dataToExport:', dataToExport.filter(t => t.fecha.includes('2025-09-30')).length);
       } else {
         // Si no hay filtros de fecha en el modal, usar los datos ya filtrados y aplicar solo otros filtros
         console.log('🚀 EXPORTANDO CON FILTROS PRINCIPALES DE LA TABLA');
