@@ -4,7 +4,7 @@ services:
     restart: unless-stopped
     environment:
       - REDIS_PASSWORD
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "$REDIS_PASSWORD"]
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a $REDIS_PASSWORD ping | grep -q PONG"]
       interval: 30s
