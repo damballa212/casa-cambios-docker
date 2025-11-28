@@ -1,5 +1,5 @@
 # Backend Dockerfile para Casa de Cambios API
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Instalar dependencias del sistema para Puppeteer
 RUN apk add --no-cache \
