@@ -23,3 +23,15 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Local backups
+backups/*.json
+ 
+# Generated export files
+transacciones_*.pdf
+
+# Local markdown logs
+log.md
