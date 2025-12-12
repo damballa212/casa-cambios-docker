@@ -417,15 +417,12 @@ const TransactionsList: React.FC = () => {
           maxUsd: config.filters?.maxAmount,
         });
 
-        // Asegurar campos de ganancia calculados antes de exportar
-        dataToExport = serverFiltered.map((transaction: Transaction) => {
-          const comisionTotal = transaction.usdTotal * (transaction.comision / 100);
-          return {
-            ...transaction,
-            gananciaGabriel: comisionTotal * 0.5,
-            gananciaColaborador: comisionTotal * 0.5
-          } as Transaction;
-        });
+        // Usar ganancias reales provenientes del servidor (sin forzar 50/50)
+        dataToExport = serverFiltered.map((transaction: Transaction) => ({
+          ...transaction,
+          gananciaGabriel: transaction.montoComisionGabrielUsd ?? 0,
+          gananciaColaborador: transaction.montoColaboradorUsd ?? 0
+        }));
 
         console.log('🔍 DESPUÉS DE consulta server-side - Total dataToExport:', dataToExport.length);
         console.log('🔍 DESPUÉS de server-side - Sept 30 en dataToExport:', dataToExport.filter(t => t.fecha.includes('2025-09-30')).length);
@@ -1705,14 +1702,12 @@ const TransactionsList: React.FC = () => {
              try {
                setLoading(true);
                const data = await apiService.getTransactions();
-               const transactionsWithGanancia = data.map((transaction: Transaction) => {
-                 const comisionTotal = transaction.usdTotal * (transaction.comision / 100);
-                 return {
-                   ...transaction,
-                   gananciaGabriel: comisionTotal * 0.5,
-                   gananciaColaborador: comisionTotal * 0.5
-                 };
-               });
+               const transactionsWithGanancia = data.map((transaction: Transaction) => ({
+                 ...transaction,
+                 // Mapear ganancias desde los campos del servidor
+                 gananciaGabriel: transaction.montoComisionGabrielUsd ?? 0,
+                 gananciaColaborador: transaction.montoColaboradorUsd ?? 0
+               }));
                setTransactions(transactionsWithGanancia);
                setError(null);
              } catch (err: any) {
