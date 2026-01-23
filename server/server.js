@@ -53,7 +53,8 @@ const PORT = process.env.PORT || 3001;
 
 // Configurar middlewares básicos ANTES de las rutas
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:4173'],
+  // Permitir origen desde variable de entorno o todos (*) para evitar problemas en deploy
+  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']

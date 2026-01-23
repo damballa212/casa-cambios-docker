@@ -237,6 +237,12 @@ export class NotificationSystem {
     this.rateLimitCache = new Map(); // Cache para rate limiting
   }
 
+  // Método initialize requerido por server.js
+  async initialize() {
+    console.log('📢 Notification system initialized');
+    return true;
+  }
+
   // Enviar notificación
   async sendNotification(type, data, options = {}) {
     try {
