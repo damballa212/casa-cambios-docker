@@ -141,6 +141,12 @@ class NotificationSystem {
     }
   }
 
+  // Método initialize requerido por server.js
+  async initialize() {
+    console.log('📢 Notification system initialized');
+    return true;
+  }
+
   // Enviar notificación
   async send(type, data, options = {}) {
     try {
@@ -193,12 +199,6 @@ class NotificationSystem {
       console.error('Error sending notification:', error);
       // No enviar notificación de error para evitar loops infinitos
     }
-  }
-
-  // Método initialize requerido por server.js
-  async initialize() {
-    console.log('📢 Notification system initialized');
-    return true;
   }
 
   // Verificar rate limiting
