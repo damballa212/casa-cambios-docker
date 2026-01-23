@@ -57,9 +57,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
-    depends_on:
-      - backend
     restart: unless-stopped
+    expose:
+      - "80"
     networks:
       - dokploy-network
     healthcheck:
@@ -69,7 +69,9 @@ services:
       retries: 3
       start_period: 40s
     labels:
+      - "traefik.enable=true"
       - "traefik.docker.network=dokploy-network"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
 
 volumes:
   redis_data:
