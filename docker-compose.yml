@@ -5,10 +5,10 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
-    networks:
-      - dokploy-network
     volumes:
       - redis_data:/data
+    networks:
+      - dokploy-network
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a $REDIS_PASSWORD ping | grep -q PONG"]
       interval: 30s
@@ -60,14 +60,14 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+    networks:
+      - dokploy-network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-    networks:
-      - dokploy-network
     labels:
       - "traefik.docker.network=dokploy-network"
 
