@@ -62,10 +62,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    labels:
+      - "traefik.docker.network=dokploy-network"
 
 volumes:
   redis_data:
-
-networks:
-  default:
-    driver: bridge
