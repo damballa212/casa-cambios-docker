@@ -100,152 +100,51 @@ const notificationConfig = {
     priority: PRIORITY_LEVELS.HIGH,
     channels: ['email', 'database'],
     recipients: ['admin@casadecambios.com', 'security@casadecambios.com'],
-    template: 'login_failed_multiple'
+    template: 'login_failed'
   },
   [NOTIFICATION_TYPES.LARGE_TRANSACTION]: {
-    priority: PRIORITY_LEVELS.MEDIUM,
+    priority: PRIORITY_LEVELS.HIGH,
     channels: ['email', 'database'],
-    recipients: ['admin@casadecambios.com', 'gabriel@casadecambios.com'],
+    recipients: ['admin@casadecambios.com', 'finance@casadecambios.com'],
     template: 'large_transaction'
   },
   [NOTIFICATION_TYPES.SYSTEM_OFFLINE]: {
     priority: PRIORITY_LEVELS.CRITICAL,
     channels: ['email'],
-    recipients: ['admin@casadecambios.com', 'tech@casadecambios.com'],
+    recipients: ['admin@casadecambios.com', 'devops@casadecambios.com'],
     template: 'system_offline'
   },
   [NOTIFICATION_TYPES.SUSPICIOUS_ACTIVITY]: {
-    priority: PRIORITY_LEVELS.HIGH,
+    priority: PRIORITY_LEVELS.CRITICAL,
     channels: ['email', 'database'],
-    recipients: ['admin@casadecambios.com', 'security@casadecambios.com'],
+    recipients: ['security@casadecambios.com', 'admin@casadecambios.com'],
     template: 'suspicious_activity'
   }
 };
 
-// Plantillas de email
-const emailTemplates = {
-  system_error: {
-    subject: '🚨 Error del Sistema - Casa de Cambios',
-    html: (data) => `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: #dc2626; color: white; padding: 20px; text-align: center;">
-          <h1>🚨 Error del Sistema</h1>
-        </div>
-        <div style="padding: 20px; background: #f9fafb;">
-          <h2>Detalles del Error:</h2>
-          <p><strong>Mensaje:</strong> ${data.message}</p>
-          <p><strong>Componente:</strong> ${data.component || 'Desconocido'}</p>
-          <p><strong>Timestamp:</strong> ${new Date(data.timestamp).toLocaleString('es-ES')}</p>
-          ${data.details ? `<p><strong>Detalles:</strong> ${JSON.stringify(data.details, null, 2)}</p>` : ''}
-          <p><strong>Servidor:</strong> ${process.env.NODE_ENV || 'development'}</p>
-        </div>
-        <div style="padding: 20px; background: #fee2e2; border-left: 4px solid #dc2626;">
-          <p><strong>⚠️ Acción Requerida:</strong> Revisar inmediatamente el sistema y corregir el error.</p>
-        </div>
-      </div>
-    `
-  },
-  security_alert: {
-    subject: '🔒 Alerta de Seguridad - Casa de Cambios',
-    html: (data) => `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: #dc2626; color: white; padding: 20px; text-align: center;">
-          <h1>🔒 Alerta de Seguridad</h1>
-        </div>
-        <div style="padding: 20px; background: #f9fafb;">
-          <h2>Evento de Seguridad Detectado:</h2>
-          <p><strong>Tipo:</strong> ${data.message}</p>
-          <p><strong>Usuario:</strong> ${data.username || 'Desconocido'}</p>
-          <p><strong>IP:</strong> ${data.ipAddress || 'Desconocida'}</p>
-          <p><strong>Timestamp:</strong> ${new Date(data.timestamp).toLocaleString('es-ES')}</p>
-          ${data.userAgent ? `<p><strong>User Agent:</strong> ${data.userAgent}</p>` : ''}
-        </div>
-        <div style="padding: 20px; background: #fef2f2; border-left: 4px solid #dc2626;">
-          <p><strong>🚨 Acción Inmediata:</strong> Revisar logs de seguridad y tomar medidas preventivas.</p>
-        </div>
-      </div>
-    `
-  },
-  transaction_failed: {
-    subject: '💰 Transacción Fallida - Casa de Cambios',
-    html: (data) => `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: #f59e0b; color: white; padding: 20px; text-align: center;">
-          <h1>💰 Transacción Fallida</h1>
-        </div>
-        <div style="padding: 20px; background: #f9fafb;">
-          <h2>Detalles de la Transacción:</h2>
-          <p><strong>Cliente:</strong> ${data.cliente || 'Desconocido'}</p>
-          <p><strong>Monto USD:</strong> $${data.usdTotal || 'N/A'}</p>
-          <p><strong>Error:</strong> ${data.message}</p>
-          <p><strong>Timestamp:</strong> ${new Date(data.timestamp).toLocaleString('es-ES')}</p>
-        </div>
-        <div style="padding: 20px; background: #fef3c7; border-left: 4px solid #f59e0b;">
-          <p><strong>⚠️ Revisar:</strong> Verificar el estado de la transacción y contactar al cliente si es necesario.</p>
-        </div>
-      </div>
-    `
-  },
-  database_error: {
-    subject: '🗄️ Error de Base de Datos - Casa de Cambios',
-    html: (data) => `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: #dc2626; color: white; padding: 20px; text-align: center;">
-          <h1>🗄️ Error de Base de Datos</h1>
-        </div>
-        <div style="padding: 20px; background: #f9fafb;">
-          <h2>Error en la Base de Datos:</h2>
-          <p><strong>Mensaje:</strong> ${data.message}</p>
-          <p><strong>Operación:</strong> ${data.operation || 'Desconocida'}</p>
-          <p><strong>Tabla:</strong> ${data.table || 'Desconocida'}</p>
-          <p><strong>Timestamp:</strong> ${new Date(data.timestamp).toLocaleString('es-ES')}</p>
-        </div>
-        <div style="padding: 20px; background: #fee2e2; border-left: 4px solid #dc2626;">
-          <p><strong>🚨 Crítico:</strong> Verificar inmediatamente la conectividad y integridad de la base de datos.</p>
-        </div>
-      </div>
-    `
-  },
-  large_transaction: {
-    subject: '💎 Transacción de Alto Valor - Casa de Cambios',
-    html: (data) => `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: #059669; color: white; padding: 20px; text-align: center;">
-          <h1>💎 Transacción de Alto Valor</h1>
-        </div>
-        <div style="padding: 20px; background: #f9fafb;">
-          <h2>Transacción Procesada:</h2>
-          <p><strong>Cliente:</strong> ${data.cliente}</p>
-          <p><strong>Colaborador:</strong> ${data.colaborador}</p>
-          <p><strong>Monto USD:</strong> $${data.usdTotal?.toLocaleString()}</p>
-          <p><strong>Monto Gs:</strong> ₲${data.montoGs?.toLocaleString()}</p>
-          <p><strong>Comisión:</strong> ${data.comision}%</p>
-          <p><strong>Timestamp:</strong> ${new Date(data.timestamp).toLocaleString('es-ES')}</p>
-        </div>
-        <div style="padding: 20px; background: #d1fae5; border-left: 4px solid #059669;">
-          <p><strong>ℹ️ Información:</strong> Transacción de alto valor procesada exitosamente.</p>
-        </div>
-      </div>
-    `
-  }
-};
-
-// Clase principal del sistema de notificaciones
-export class NotificationSystem {
+class NotificationSystem {
   constructor() {
-    this.isEnabled = true;
-    this.rateLimitCache = new Map(); // Cache para rate limiting
+    this.rateLimitCache = new Map();
+  }
+
+  generateNotificationId() {
+    return `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  priorityToLogLevel(priority) {
+    switch (priority) {
+      case PRIORITY_LEVELS.CRITICAL: return 'error';
+      case PRIORITY_LEVELS.HIGH: return 'error';
+      case PRIORITY_LEVELS.MEDIUM: return 'warn';
+      case PRIORITY_LEVELS.LOW: return 'info';
+      default: return 'info';
+    }
   }
 
   // Enviar notificación
-  async sendNotification(type, data, options = {}) {
+  async send(type, data, options = {}) {
     try {
-      if (!this.isEnabled) {
-        console.log('Notifications disabled, skipping:', type);
-        return;
-      }
-
-      // Verificar rate limiting
+      // Verificar rate limit
       if (this.isRateLimited(type, data)) {
         console.log('Notification rate limited:', type);
         return;
@@ -294,6 +193,12 @@ export class NotificationSystem {
       console.error('Error sending notification:', error);
       // No enviar notificación de error para evitar loops infinitos
     }
+  }
+
+  // Método initialize requerido por server.js
+  async initialize() {
+    console.log('📢 Notification system initialized');
+    return true;
   }
 
   // Verificar rate limiting
@@ -347,183 +252,72 @@ export class NotificationSystem {
         console.error('Error saving notification to database:', error);
       }
     } catch (error) {
-      console.error('Error in saveToDatabase:', error);
+      console.error('Exception saving notification to database:', error);
     }
   }
 
-  // Enviar email
-  async sendEmail(notification, templateName) {
-    try {
-      if (!emailTransporter) {
-        console.log('Email transporter not configured, skipping email notification');
-        return;
-      }
-
-      const template = emailTemplates[templateName];
-      if (!template) {
-        console.error('Email template not found:', templateName);
-        return;
-      }
-
-      const mailOptions = {
-        from: process.env.SMTP_FROM || process.env.SMTP_USER,
-        to: notification.recipients.join(', '),
-        subject: template.subject,
-        html: template.html(notification.data)
-      };
-
-      await emailTransporter.sendMail(mailOptions);
-      console.log(`📧 Email notification sent to: ${notification.recipients.join(', ')}`);
-      
-    } catch (error) {
-      console.error('Error sending email notification:', error);
-    }
-  }
-
-  // Convertir prioridad a nivel de log
-  priorityToLogLevel(priority) {
-    switch (priority) {
-      case PRIORITY_LEVELS.CRITICAL:
-        return 'error';
-      case PRIORITY_LEVELS.HIGH:
-        return 'warning';
-      case PRIORITY_LEVELS.MEDIUM:
-        return 'info';
-      case PRIORITY_LEVELS.LOW:
-        return 'info';
-      default:
-        return 'info';
-    }
-  }
-
-  // Generar ID único para notificación
-  generateNotificationId() {
-    return `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  // Obtener notificaciones recientes
-  async getRecentNotifications(limit = 50) {
-    try {
-      const { data, error } = await supabase
-        .from('system_logs')
-        .select('*')
-        .eq('component', 'Notifications')
-        .order('timestamp', { ascending: false })
-        .limit(limit);
-
-      if (error) {
-        console.error('Error getting recent notifications:', error);
-        return [];
-      }
-
-      return data;
-    } catch (error) {
-      console.error('Error in getRecentNotifications:', error);
-      return [];
-    }
-  }
-
-  // Habilitar/deshabilitar notificaciones
-  setEnabled(enabled) {
-    this.isEnabled = enabled;
-    console.log(`Notifications ${enabled ? 'enabled' : 'disabled'}`);
+  // Enviar email (stub)
+  async sendEmail(notification, template) {
+    // Implementar envío de email real aquí
+    console.log(`Sending email for notification ${notification.id} using template ${template}`);
   }
 }
 
-// Instancia global del sistema de notificaciones
+// Singleton instance
 export const notificationSystem = new NotificationSystem();
 
-// Funciones de conveniencia para tipos específicos
-export const notifySystemError = (message, component, details = {}) => {
-  return notificationSystem.sendNotification(NOTIFICATION_TYPES.SYSTEM_ERROR, {
+// Helpers para notificaciones comunes
+export const notifySystemError = (error, component) => {
+  notificationSystem.send(NOTIFICATION_TYPES.SYSTEM_ERROR, {
+    message: `System Error in ${component}: ${error.message}`,
+    error: error.stack,
+    component
+  });
+};
+
+export const notifySecurityAlert = (message, details) => {
+  notificationSystem.send(NOTIFICATION_TYPES.SECURITY_ALERT, {
     message,
-    component,
-    details,
-    timestamp: new Date().toISOString()
+    ...details
   });
 };
 
-export const notifySecurityAlert = (message, username, ipAddress, userAgent, details = {}) => {
-  return notificationSystem.sendNotification(NOTIFICATION_TYPES.SECURITY_ALERT, {
-    message,
-    username,
-    ipAddress,
-    userAgent,
-    details,
-    timestamp: new Date().toISOString()
+export const notifyTransactionFailed = (transactionId, reason) => {
+  notificationSystem.send(NOTIFICATION_TYPES.TRANSACTION_FAILED, {
+    message: `Transaction ${transactionId} failed: ${reason}`,
+    transactionId,
+    reason
   });
 };
 
-export const notifyTransactionFailed = (cliente, usdTotal, message, details = {}) => {
-  return notificationSystem.sendNotification(NOTIFICATION_TYPES.TRANSACTION_FAILED, {
-    message,
-    cliente,
-    usdTotal,
-    details,
-    timestamp: new Date().toISOString()
+export const notifyDatabaseError = (error, query) => {
+  notificationSystem.send(NOTIFICATION_TYPES.DATABASE_ERROR, {
+    message: `Database Error: ${error.message}`,
+    error: error.code,
+    query
   });
 };
 
-export const notifyDatabaseError = (message, operation, table, details = {}) => {
-  return notificationSystem.sendNotification(NOTIFICATION_TYPES.DATABASE_ERROR, {
-    message,
-    operation,
-    table,
-    details,
-    timestamp: new Date().toISOString()
+export const notifyLargeTransaction = (transaction) => {
+  notificationSystem.send(NOTIFICATION_TYPES.LARGE_TRANSACTION, {
+    message: `Large transaction detected: ${transaction.amount} ${transaction.currency}`,
+    transactionId: transaction.id,
+    amount: transaction.amount,
+    currency: transaction.currency
   });
 };
 
-export const notifyLargeTransaction = (transactionData) => {
-  return notificationSystem.sendNotification(NOTIFICATION_TYPES.LARGE_TRANSACTION, {
-    message: `Transacción de alto valor: $${transactionData.usdTotal?.toLocaleString()}`,
-    ...transactionData,
-    timestamp: new Date().toISOString()
+export const notifyBackupFailed = (error) => {
+  notificationSystem.send(NOTIFICATION_TYPES.BACKUP_FAILED, {
+    message: `Backup failed: ${error.message}`,
+    error: error.message
   });
 };
 
-export const notifyBackupFailed = (backupId, error, details = {}) => {
-  return notificationSystem.sendNotification(NOTIFICATION_TYPES.BACKUP_FAILED, {
-    message: `Backup fallido: ${backupId}`,
-    backupId,
-    error: error.message,
-    details,
-    timestamp: new Date().toISOString()
+export const notifyMultipleLoginFailures = (email, ip) => {
+  notificationSystem.send(NOTIFICATION_TYPES.LOGIN_FAILED_MULTIPLE, {
+    message: `Multiple failed login attempts for ${email} from ${ip}`,
+    email,
+    ip
   });
 };
-
-export const notifyMultipleLoginFailures = (username, ipAddress, attempts, details = {}) => {
-  return notificationSystem.sendNotification(NOTIFICATION_TYPES.LOGIN_FAILED_MULTIPLE, {
-    message: `Múltiples intentos de login fallidos: ${username} (${attempts} intentos)`,
-    username,
-    ipAddress,
-    attempts,
-    details,
-    timestamp: new Date().toISOString()
-  });
-};
-
-export const notifySuspiciousActivity = (message, details = {}) => {
-  return notificationSystem.sendNotification(NOTIFICATION_TYPES.SUSPICIOUS_ACTIVITY, {
-    message,
-    details,
-    timestamp: new Date().toISOString()
-  });
-};
-
-// Limpiar cache de rate limiting periódicamente
-setInterval(() => {
-  const now = Date.now();
-  const windowMs = 5 * 60 * 1000;
-  
-  for (const [key, timestamps] of notificationSystem.rateLimitCache.entries()) {
-    const validTimestamps = timestamps.filter(ts => now - ts < windowMs);
-    if (validTimestamps.length === 0) {
-      notificationSystem.rateLimitCache.delete(key);
-    } else {
-      notificationSystem.rateLimitCache.set(key, validTimestamps);
-    }
-  }
-}, 5 * 60 * 1000); // Cada 5 minutos
-
-console.log('📢 Notification system initialized');
