@@ -784,50 +784,44 @@ app.get('/api/clients', authenticateToken, async (req, res) => {
         // Normalizar nombre de la transacción
         const txClientName = clientNameRaw.trim().toLowerCase();
         
-        // Intentar encontrar el nombre del cliente correspondiente
-        let matchedClientName = txClientName;
-
-        // 1. Prioridad: Coincidencia EXACTA con un cliente existente
-        if (clientNameMap[txClientName]) {
-             matchedClientName = txClientName;
-        } 
-        // 2. Fallback: Coincidencia parcial (solo si no hay exacta)
-        else {
-             // Buscar coincidencia parcial
-             // Preferir la coincidencia más larga para evitar que "Abuelita" capture "Abuelita Novia"
-             const possibleMatches = Object.keys(clientNameMap).filter(cName => 
-                 cName.includes(txClientName) || txClientName.includes(cName)
-             );
-             
-             if (possibleMatches.length > 0) {
-                 // Ordenar por longitud descendente (el más específico primero)
-                 possibleMatches.sort((a, b) => b.length - a.length);
-                 matchedClientName = possibleMatches[0];
-             }
-        }
-
-        if (!statsByClient[matchedClientName]) {
-          statsByClient[matchedClientName] = {
-            count: 0,
-            volumeUsd: 0,
-            commissions: 0,
-            lastDate: null
-          };
-        }
-
-        const usd = Number(tx.usd_total || 0);
-        const comision = Number(tx.comision || 0);
-        const comisionMonto = usd * (comision / 100);
-
-        statsByClient[matchedClientName].count++;
-        statsByClient[matchedClientName].volumeUsd += usd;
-        statsByClient[matchedClientName].commissions += comisionMonto;
+        // ESTRATEGIA ESTRICTA:
+        // Solo asignamos si hay coincidencia EXACTA en el mapa de clientes.
+        // Si la transacción dice "abuelita", SOLO asignamos al cliente "Abuelita".
+        // Si la transacción dice "abuelita novia", SOLO asignamos al cliente "Abuelita Novia".
+        // Eliminamos la lógica difusa que causaba que "Abuelita" absorbiera a "Abuelita Novia" o viceversa.
         
-        const txDate = new Date(tx.created_at || tx.fecha);
-        if (!isNaN(txDate.getTime())) {
-            if (!statsByClient[matchedClientName].lastDate || txDate > statsByClient[matchedClientName].lastDate) {
-              statsByClient[matchedClientName].lastDate = txDate;
-            }
+        if (clientNameMap[txClientName]) {
+             const matchedClientName = txClientName;
+             
+             if (!statsByClient[matchedClientName]) {
+               statsByClient[matchedClientName] = {
+                 count: 0,
+                 volumeUsd: 0,
+                 commissions: 0,
+                 lastDate: null
+               };
+             }
+
+             const usd = Number(tx.usd_total || 0);
+             const comision = Number(tx.comision || 0);
+             const comisionMonto = usd * (comision / 100);
+
+             statsByClient[matchedClientName].count++;
+             statsByClient[matchedClientName].volumeUsd += usd;
+             statsByClient[matchedClientName].commissions += comisionMonto;
+             
+             const txDate = new Date(tx.created_at || tx.fecha);
+             if (!isNaN(txDate.getTime())) {
+                 if (!statsByClient[matchedClientName].lastDate || txDate > statsByClient[matchedClientName].lastDate) {
+                   statsByClient[matchedClientName].lastDate = txDate;
+                 }
+             }
+        } 
+        // Si no hay coincidencia exacta, esta transacción queda huérfana de estadísticas en la vista de clientes
+        // Esto es preferible a asignarla incorrectamente.
+        else {
+             // Opcional: Log para saber qué se perdió
+             // console.log(`Transacción huérfana: ${txClientName}`);
         }
       });
     }
