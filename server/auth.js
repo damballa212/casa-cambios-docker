@@ -67,25 +67,27 @@ export const verifyToken = (token) => {
 // Verificar refresh token
 export const verifyRefreshToken = async (refreshToken) => {
   try {
+    // 1. Obtener sesión
     const { data: session, error } = await supabase
       .from('user_sessions')
-      .select(`
-        id,
-        user_id,
-        expires_at,
-        is_active,
-        users!inner(
-          id,
-          username,
-          role,
-          status
-        )
-      `)
+      .select('*')
       .eq('refresh_token', refreshToken)
       .eq('is_active', true)
       .single();
 
     if (error || !session) {
+      return null;
+    }
+
+    // 2. Obtener usuario asociado (desacoplado para evitar errores de FK)
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('id, username, role, status')
+      .eq('id', session.user_id)
+      .single();
+
+    if (userError || !user) {
+      console.error('Session found but user not found:', session.user_id);
       return null;
     }
 
@@ -100,13 +102,13 @@ export const verifyRefreshToken = async (refreshToken) => {
     }
 
     // Verificar si el usuario está activo
-    if (session.users.status !== 'active') {
+    if (user.status !== 'active') {
       return null;
     }
 
     return {
       sessionId: session.id,
-      user: session.users
+      user: user
     };
   } catch (error) {
     console.error('Error verifying refresh token:', error);
@@ -272,7 +274,7 @@ export const createUserSession = async (userId, accessTokenJti, ipAddress = null
         .single();
       
       if (error) {
-        console.log('ℹ️ Supabase user_sessions no disponible, usando fallback');
+        console.log('ℹ️ Supabase user_sessions no disponible, usando fallback. Error:', error.message, error.details, error.hint);
         // Fallback: retornar token sin persistir en BD por ahora
         return refreshToken;
       }

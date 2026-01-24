@@ -143,11 +143,7 @@ app.post('/api/auth/login', loginRateLimiter, async (req, res) => {
     const { user, error } = await authenticateUser(username, password);
     
     if (error || !user) {
-      // Registrar intento fallido
-      logAuthEvent('login_failed', { username, reason: error || 'Credenciales inválidas' });
-      
-      // Notificar si es necesario (lógica manejada en auth.js o aquí si se desea explícita)
-      
+      // El log de fallo ya se maneja dentro de authenticateUser
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
     
@@ -155,8 +151,7 @@ app.post('/api/auth/login', loginRateLimiter, async (req, res) => {
     const accessToken = generateAccessToken(user);
     const refreshToken = await createUserSession(user.id, req.ip, req.get('user-agent'));
     
-    // Registrar éxito
-    logAuthEvent('login_success', { userId: user.id, username: user.username });
+    // El log de éxito ya se maneja dentro de authenticateUser
     
     res.json({
       success: true,
