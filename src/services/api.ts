@@ -1333,7 +1333,7 @@ export const checkBackendHealth = async (): Promise<boolean> => {
     console.log('🏥 Checking backend health...');
     const health = await apiService.healthCheck();
     console.log('🏥 Health response:', health);
-    const isHealthy = health.status === 'OK';
+    const isHealthy = health.status === 'OK' || health.status === 'ok';
     console.log('🏥 Is healthy:', isHealthy);
     return isHealthy;
   } catch (error) {
