@@ -367,8 +367,8 @@ app.get('/health', (req, res) => {
   res.json(status);
 });
 
-// Endpoint de métricas para admin
-app.get('/api/metrics', authenticateToken, requireRole(['admin', 'owner']), async (req, res) => {
+// Endpoint de métricas para admin (Corregido URL para coincidir con frontend)
+app.get('/api/dashboard/metrics', authenticateToken, requireRole(['admin', 'owner']), async (req, res) => {
   try {
     // Obtener estadísticas de Rate Limiting
     const rateLimitStats = await getRateLimitStats();
@@ -382,13 +382,191 @@ app.get('/api/metrics', authenticateToken, requireRole(['admin', 'owner']), asyn
       memory: process.memoryUsage(),
       cpu: process.cpuUsage()
     };
+
+    // Obtener métricas de negocio reales (si existen tablas)
+    let totalTransactions = 0;
+    let dailyVolume = 0;
+    let activeCollaborators = 0;
+
+    if (dbConnected) {
+      try {
+        const { count: txCount } = await supabase.from('transactions').select('*', { count: 'exact', head: true });
+        totalTransactions = txCount || 0;
+        
+        const { count: colCount } = await supabase.from('collaborators').select('*', { count: 'exact', head: true }).eq('status', 'active');
+        activeCollaborators = colCount || 0;
+        
+        // Volumen diario (aproximado)
+        const today = new Date().toISOString().split('T')[0];
+        const { data: todayTxs } = await supabase
+          .from('transactions')
+          .select('usd_total')
+          .gte('created_at', today);
+          
+        if (todayTxs) {
+          dailyVolume = todayTxs.reduce((sum, tx) => sum + (tx.usd_total || 0), 0);
+        }
+      } catch (err) {
+        console.warn('Error obteniendo métricas de DB, usando defaults', err.message);
+      }
+    }
     
+    // Estructura esperada por DashboardMetrics en frontend
     res.json({
+      totalTransactions,
+      dailyVolume,
+      currentRate: 0, // Se llenará con la tasa actual si se implementa
+      activeCollaborators,
+      systemStatus: 'active',
+      pendingMessages: 0,
+      // Extras para admin panel
       rateLimits: rateLimitStats,
       cache: cacheStats,
-      system: systemStatus,
+      serverStats: systemStatus,
       scheduler: getSchedulerStatus()
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// RUTAS DE TRANSACCIONES (Faltantes)
+// ==========================================
+
+app.get('/api/transactions', authenticateToken, async (req, res) => {
+  try {
+    // Implementación básica con Supabase
+    let query = supabase.from('transactions').select('*').order('created_at', { ascending: false });
+    
+    // Aplicar filtros si existen (limit, etc)
+    if (req.query.limit) {
+      query = query.limit(parseInt(req.query.limit));
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+       // Si la tabla no existe, devolver array vacío para no romper el frontend
+       if (error.code === '42P01') { // undefined_table
+         console.warn('Tabla transactions no existe, devolviendo array vacío');
+         return res.json([]);
+       }
+       throw error;
+    }
+
+    // Mapear campos si es necesario (snake_case a camelCase)
+    // El frontend espera: id, fecha, cliente, colaborador, usdTotal, etc.
+    // Asumimos que la DB tiene campos similares o mapeamos aquí
+    const mappedData = data.map(tx => ({
+      id: tx.id,
+      fecha: tx.created_at || tx.fecha,
+      cliente: tx.client_name || tx.cliente, // Fallback
+      colaborador: tx.collaborator_name || tx.colaborador,
+      usdTotal: tx.usd_total || tx.usdTotal,
+      comision: tx.commission || tx.comision,
+      usdNeto: tx.usd_net || tx.usdNeto,
+      montoGs: tx.amount_gs || tx.montoGs,
+      tasaUsada: tx.exchange_rate || tx.tasaUsada,
+      status: tx.status || 'completed',
+      chatId: tx.chat_id || tx.chatId,
+      idempotencyKey: tx.idempotency_key
+    }));
+
+    res.json(mappedData);
+  } catch (error) {
+    console.error('Error fetching transactions:', error);
+    res.status(500).json({ error: 'Error al obtener transacciones' });
+  }
+});
+
+app.post('/api/transactions', authenticateToken, sensitiveOperationsRateLimiter, async (req, res) => {
+  try {
+    const txData = req.body;
+    // Mapear camelCase a snake_case para Supabase
+    const dbData = {
+      client_name: txData.cliente,
+      collaborator_name: txData.colaborador,
+      usd_total: txData.usdTotal,
+      commission: txData.comision,
+      exchange_rate: txData.tasaUsada,
+      chat_id: txData.chatId,
+      created_by: req.user.id,
+      status: 'completed', // Por defecto
+      created_at: new Date()
+    };
+
+    const { data, error } = await supabase.from('transactions').insert([dbData]).select();
+    
+    if (error) throw error;
+    
+    // Respuesta formato frontend
+    res.json({
+      success: true,
+      message: 'Transacción creada',
+      transaction: data[0]
+    });
+  } catch (error) {
+    console.error('Error creating transaction:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// RUTAS DE COLABORADORES (Faltantes)
+// ==========================================
+
+app.get('/api/collaborators', authenticateToken, async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('collaborators').select('*');
+    
+    if (error) {
+      if (error.code === '42P01') return res.json([]);
+      throw error;
+    }
+    
+    // Mapeo
+    const mapped = data.map(c => ({
+      id: c.id,
+      name: c.name,
+      basePct: c.base_pct,
+      txCount: c.tx_count || 0,
+      totalCommissionUsd: c.total_commission_usd || 0,
+      status: c.status || 'active'
+    }));
+    
+    res.json(mapped);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// RUTAS DE CLIENTES (Faltantes)
+// ==========================================
+
+app.get('/api/clients', authenticateToken, async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('clients').select('*');
+    if (error) {
+      if (error.code === '42P01') return res.json([]);
+      throw error;
+    }
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoint de métricas para admin (OLD - Deprecated but kept for compatibility if needed)
+app.get('/api/metrics/legacy', authenticateToken, requireRole(['admin', 'owner']), async (req, res) => {
+  try {
+    const systemStatus = {
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      cpu: process.cpuUsage()
+    };
+    res.json({ system: systemStatus });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
