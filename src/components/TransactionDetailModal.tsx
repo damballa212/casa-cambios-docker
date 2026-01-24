@@ -213,11 +213,11 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                     <span className="text-purple-700 font-medium">Nombre:</span>
                     <span className="text-purple-900 font-semibold">{transaction.colaborador}</span>
                   </div>
-                  {transaction.gananciaColaborador && (
+                  {transaction.gananciaColaborador !== undefined && transaction.gananciaColaborador !== null && (
                     <div className="flex items-center justify-between">
                       <span className="text-purple-700 font-medium">Ganancia:</span>
                       <span className="text-purple-900 font-semibold">
-                        ${transaction.gananciaColaborador.toFixed(2)}
+                        ${(transaction.gananciaColaborador || 0).toFixed(2)}
                       </span>
                     </div>
                   )}
@@ -246,16 +246,16 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                 </div>
                 <div className="bg-white/70 rounded-lg p-4">
                   <div className="text-green-700 text-sm font-medium mb-1">Tasa Usada</div>
-                  <div className="text-xl font-bold text-green-900">{transaction.tasaUsada.toLocaleString()} Gs/$</div>
+                  <div className="text-xl font-bold text-green-900">{(transaction.tasaUsada || 0).toLocaleString()} Gs/$</div>
                 </div>
                 <div className="bg-white/70 rounded-lg p-4">
                   <div className="text-green-700 text-sm font-medium mb-1">Monto en Guaraníes</div>
-                  <div className="text-xl font-bold text-green-900">{transaction.montoGs.toLocaleString()} Gs</div>
+                  <div className="text-xl font-bold text-green-900">{(transaction.montoGs || 0).toLocaleString()} Gs</div>
                 </div>
                 {transaction.gananciaGabriel && (
                   <div className="bg-white/70 rounded-lg p-4">
                     <div className="text-green-700 text-sm font-medium mb-1">Ganancia Gabriel</div>
-                    <div className="text-xl font-bold text-green-900">${transaction.gananciaGabriel.toFixed(2)}</div>
+                    <div className="text-xl font-bold text-green-900">${(transaction.gananciaGabriel || 0).toFixed(2)}</div>
                   </div>
                 )}
               </div>

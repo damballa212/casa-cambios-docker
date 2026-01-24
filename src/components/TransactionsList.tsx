@@ -179,8 +179,8 @@ const TransactionsList: React.FC = () => {
           transaction.cliente.toLowerCase().includes(searchLower) ||
           transaction.colaborador.toLowerCase().includes(searchLower) ||
           transaction.id.toLowerCase().includes(searchLower) ||
-          transaction.usdTotal.toString().includes(searchLower) ||
-          transaction.montoGs.toString().includes(searchLower)
+          (transaction.usdTotal || 0).toString().includes(searchLower) ||
+          (transaction.montoGs || 0).toString().includes(searchLower)
         );
       }
 
@@ -1495,7 +1495,7 @@ const TransactionsList: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-gray-500">USD Total:</span>
-                    <div className="font-medium text-green-600">${transaction.usdTotal.toFixed(2)}</div>
+                    <div className="font-medium text-green-600">${(Number(transaction.usdTotal) || 0).toFixed(2)}</div>
                   </div>
                   <div>
                     <span className="text-gray-500">Comisión:</span>
@@ -1503,7 +1503,7 @@ const TransactionsList: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-gray-500">Tasa:</span>
-                    <div className="font-medium text-blue-600">{transaction.tasaUsada.toLocaleString()}</div>
+                    <div className="font-medium text-blue-600">{(Number(transaction.tasaUsada) || 0).toLocaleString()}</div>
                   </div>
                   <div>
                     <span className="text-gray-500">Estado:</span>
@@ -1565,16 +1565,16 @@ const TransactionsList: React.FC = () => {
                   <td className="w-28 px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center">
                       <DollarSign className="w-4 h-4 text-green-500 mr-1" />
-                      <span className="text-sm font-medium text-gray-900">${transaction.usdTotal.toFixed(2)}</span>
+                      <span className="text-sm font-medium text-gray-900">${(Number(transaction.usdTotal) || 0).toFixed(2)}</span>
                     </div>
                   </td>
-                  <td className="w-24 px-4 py-3 whitespace-nowrap text-sm text-gray-900">{transaction.comision}%</td>
+                  <td className="w-24 px-4 py-3 whitespace-nowrap text-sm text-gray-900">{(Number(transaction.comision) || 0)}%</td>
                   <td className="w-28 px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                    <span className="font-medium text-blue-600">{transaction.tasaUsada.toLocaleString()}</span>
+                    <span className="font-medium text-blue-600">{(Number(transaction.tasaUsada) || 0).toLocaleString()}</span>
                     <span className="text-xs text-gray-500 ml-1">Gs/$</span>
                   </td>
                   <td className="w-32 px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                    {transaction.montoGs.toLocaleString()} Gs
+                    {(Number(transaction.montoGs) || 0).toLocaleString()} Gs
                   </td>
                   <td className="w-28 px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center space-x-2">
@@ -1637,7 +1637,7 @@ const TransactionsList: React.FC = () => {
             <div>
               <p className="text-sm text-gray-600">Volumen USD</p>
               <p className="text-2xl font-bold text-gray-900">
-                ${filteredTransactions.reduce((sum, t) => sum + t.usdTotal, 0).toFixed(2)}
+                ${filteredTransactions.reduce((sum, t) => sum + (Number(t.usdTotal) || 0), 0).toFixed(2)}
               </p>
             </div>
             <DollarSign className="w-8 h-8 text-green-500" />
@@ -1648,7 +1648,7 @@ const TransactionsList: React.FC = () => {
             <div>
               <p className="text-sm text-gray-600">Comisiones</p>
               <p className="text-2xl font-bold text-gray-900">
-                ${filteredTransactions.reduce((sum, t) => sum + (t.usdTotal * t.comision / 100), 0).toFixed(2)}
+                ${filteredTransactions.reduce((sum, t) => sum + ((Number(t.usdTotal) || 0) * (Number(t.comision) || 0) / 100), 0).toFixed(2)}
               </p>
             </div>
             <DollarSign className="w-8 h-8 text-purple-500" />
@@ -1659,7 +1659,7 @@ const TransactionsList: React.FC = () => {
             <div>
               <p className="text-sm text-gray-600">Promedio Comisión</p>
               <p className="text-2xl font-bold text-gray-900">
-                {(filteredTransactions.reduce((sum, t) => sum + t.comision, 0) / filteredTransactions.length).toFixed(1)}%
+                {(filteredTransactions.length > 0 ? (filteredTransactions.reduce((sum, t) => sum + (Number(t.comision) || 0), 0) / filteredTransactions.length) : 0).toFixed(1)}%
               </p>
             </div>
             <DollarSign className="w-8 h-8 text-orange-500" />

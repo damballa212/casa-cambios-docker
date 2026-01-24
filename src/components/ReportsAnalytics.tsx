@@ -1020,7 +1020,7 @@ const ReportsAnalytics: React.FC = () => {
                 </span>
               </div>
               <h3 className="text-gray-600 text-sm font-medium mb-1">Volumen Total USD</h3>
-              <p className="text-3xl font-bold text-gray-900">${summaryData.totalVolumeUsd.toFixed(2)}</p>
+              <p className="text-3xl font-bold text-gray-900">${(summaryData?.totalVolumeUsd || 0).toFixed(2)}</p>
             </div>
 
             <div className="bg-white/70 backdrop-blur-md rounded-2xl p-6 border border-gray-200/50 shadow-lg">
@@ -1033,7 +1033,7 @@ const ReportsAnalytics: React.FC = () => {
                 </span>
               </div>
               <h3 className="text-gray-600 text-sm font-medium mb-1">Total Comisiones</h3>
-              <p className="text-3xl font-bold text-gray-900">${summaryData.totalCommissions.toFixed(2)}</p>
+              <p className="text-3xl font-bold text-gray-900">${(summaryData?.totalCommissions || 0).toFixed(2)}</p>
             </div>
 
             <div className="bg-white/70 backdrop-blur-md rounded-2xl p-6 border border-gray-200/50 shadow-lg">
@@ -1046,7 +1046,7 @@ const ReportsAnalytics: React.FC = () => {
                 </span>
               </div>
               <h3 className="text-gray-600 text-sm font-medium mb-1">Promedio/Transacción</h3>
-              <p className="text-3xl font-bold text-gray-900">${summaryData.averageTransaction.toFixed(0)}</p>
+              <p className="text-3xl font-bold text-gray-900">${(summaryData?.averageTransaction || 0).toFixed(0)}</p>
             </div>
           </div>
 
@@ -1097,7 +1097,7 @@ const ReportsAnalytics: React.FC = () => {
                         ></div>
                       </div>
                     </div>
-                    <span className="text-sm font-medium text-gray-900 w-16 text-right">${month.volume.toFixed(2)}</span>
+                    <span className="text-sm font-medium text-gray-900 w-16 text-right">${(Number(month.volume) || 0).toFixed(2)}</span>
                   </div>
                 );
               })}
@@ -1118,7 +1118,7 @@ const ReportsAnalytics: React.FC = () => {
               <div key={index} className="p-4 bg-gray-50/70 rounded-xl">
                 <div className="flex items-center justify-between mb-3">
                   <span className="font-medium text-gray-900">{collab.name}</span>
-                  <span className="text-sm text-gray-600">{collab.percentage.toFixed(2)}%</span>
+                  <span className="text-sm text-gray-600">{(Number(collab.percentage) || 0).toFixed(2)}%</span>
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
@@ -1127,7 +1127,7 @@ const ReportsAnalytics: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-gray-600">Comisiones: </span>
-                    <span className="font-medium text-green-600">${collab.commissions.toFixed(2)}</span>
+                    <span className="font-medium text-green-600">${(Number(collab.commissions) || 0).toFixed(2)}</span>
                   </div>
                 </div>
                 <div className="mt-2">
@@ -1171,8 +1171,8 @@ const ReportsAnalytics: React.FC = () => {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-medium text-gray-900">${client.volume.toLocaleString()}</p>
-                  <p className="text-xs text-green-600">${client.commissions.toFixed(2)} com.</p>
+                  <p className="font-medium text-gray-900">${(client.volume || 0).toLocaleString()}</p>
+                  <p className="text-xs text-green-600">${(client.commissions || 0).toFixed(2)} com.</p>
                 </div>
               </div>
             )) : (

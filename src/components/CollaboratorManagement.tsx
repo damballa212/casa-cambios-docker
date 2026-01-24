@@ -199,28 +199,28 @@ const CollaboratorManagement: React.FC = () => {
                 <div className="flex items-center space-x-1">
                   <Percent className="w-4 h-4 text-gray-400" />
                   <span className="font-medium text-gray-900">
-                  {collaborator.basePct === null ? 'Variable' : 
-                   collaborator.basePct === 0 ? 'Resto' : `${collaborator.basePct.toFixed(2)}%`}
+                  {collaborator.basePct === null || collaborator.basePct === undefined ? 'Variable' : 
+                   collaborator.basePct === 0 ? 'Resto' : `${(collaborator.basePct || 0).toFixed(2)}%`}
                 </span>
                 </div>
               </div>
               
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Transacciones</span>
-                <span className="font-medium text-gray-900">{collaborator.txCount}</span>
+                <span className="font-medium text-gray-900">{collaborator.txCount || 0}</span>
               </div>
               
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Total Comisión USD</span>
                 <div className="flex items-center space-x-1">
                   <DollarSign className="w-4 h-4 text-green-500" />
-                  <span className="font-medium text-gray-900">${collaborator.totalCommissionUsd.toFixed(2)}</span>
+                  <span className="font-medium text-gray-900">${(collaborator.totalCommissionUsd || 0).toFixed(2)}</span>
                 </div>
               </div>
               
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Total Comisión Gs</span>
-                <span className="font-medium text-gray-900">{collaborator.totalCommissionGs.toLocaleString()} Gs</span>
+                <span className="font-medium text-gray-900">{(collaborator.totalCommissionGs || 0).toLocaleString()} Gs</span>
               </div>
             </div>
 

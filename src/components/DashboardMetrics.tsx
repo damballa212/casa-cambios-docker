@@ -36,7 +36,7 @@ const DashboardMetrics: React.FC<DashboardMetricsProps> = ({ data, backendConnec
     },
     {
       title: 'Volumen Diario USD',
-      value: `$${data.dailyVolume.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      value: `$${(data.dailyVolume || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       change: '0%',
       positive: true,
       icon: TrendingUp,
@@ -44,7 +44,7 @@ const DashboardMetrics: React.FC<DashboardMetricsProps> = ({ data, backendConnec
     },
     {
       title: 'Tasa Actual',
-      value: `${data.currentRate.toLocaleString()} Gs`,
+      value: `${(data.currentRate || 0).toLocaleString()} Gs`,
       change: '0%',
       positive: true,
       icon: BarChart3,

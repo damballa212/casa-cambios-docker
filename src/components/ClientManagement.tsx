@@ -266,13 +266,13 @@ const ClientManagement: React.FC = () => {
                   <span className="text-sm text-gray-600">Volumen Total USD</span>
                   <div className="flex items-center space-x-1">
                     <DollarSign className="w-4 h-4 text-green-500" />
-                    <span className="font-medium text-gray-900">${client.totalVolumeUsd.toFixed(2)}</span>
+                    <span className="font-medium text-gray-900">${(client.totalVolumeUsd || 0).toFixed(2)}</span>
                   </div>
                 </div>
                 
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">Promedio/Transacción</span>
-                  <span className="font-medium text-gray-900">${client.averageTransaction.toFixed(2)}</span>
+                  <span className="font-medium text-gray-900">${(client.averageTransaction || 0).toFixed(2)}</span>
                 </div>
                 
                 <div className="flex items-center justify-between">
@@ -316,7 +316,7 @@ const ClientManagement: React.FC = () => {
               <div>
                 <p className="text-sm text-gray-600">Volumen Total USD</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  ${filteredClients.reduce((sum, c) => sum + c.totalVolumeUsd, 0).toFixed(2)}
+                  ${filteredClients.reduce((sum, c) => sum + (c.totalVolumeUsd || 0), 0).toFixed(2)}
                 </p>
               </div>
               <DollarSign className="w-8 h-8 text-blue-500" />
@@ -328,7 +328,7 @@ const ClientManagement: React.FC = () => {
               <div>
                 <p className="text-sm text-gray-600">Promedio por Cliente</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  ${filteredClients.length > 0 ? (filteredClients.reduce((sum, c) => sum + c.totalVolumeUsd, 0) / filteredClients.length).toFixed(2) : '0.00'}
+                  ${filteredClients.length > 0 ? (filteredClients.reduce((sum, c) => sum + (c.totalVolumeUsd || 0), 0) / filteredClients.length).toFixed(2) : '0.00'}
                 </p>
               </div>
               <TrendingUp className="w-8 h-8 text-purple-500" />

@@ -214,7 +214,7 @@ const DeleteTransactionModal: React.FC<DeleteTransactionModalProps> = ({
                   </div>
                   <div>
                     <span className="text-gray-500">Monto:</span>
-                    <span className="ml-2 font-medium text-green-600">${transaction?.usdTotal?.toFixed(2)}</span>
+                    <span className="ml-2 font-medium text-green-600">${(Number(transaction?.usdTotal) || 0).toFixed(2)}</span>
                   </div>
                 </div>
               </div>

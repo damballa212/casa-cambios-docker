@@ -67,7 +67,9 @@ const RateManager: React.FC<RateManagerProps> = ({ currentRate, onRateUpdate }) 
     }
   };
 
-  const rateVariation = ((parseFloat(newRate) - currentRate) / currentRate * 100).toFixed(2);
+  const rateVariation = currentRate > 0 && !isNaN(parseFloat(newRate))
+    ? ((parseFloat(newRate) - currentRate) / currentRate * 100).toFixed(2)
+    : '0.00';
 
   return (
     <div className="space-y-6">
@@ -189,7 +191,7 @@ const RateManager: React.FC<RateManagerProps> = ({ currentRate, onRateUpdate }) 
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {entry.rate.toLocaleString()} Gs
+                      {(entry.rate || 0).toLocaleString()} Gs
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
