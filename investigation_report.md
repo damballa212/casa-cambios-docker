@@ -41,3 +41,12 @@ Las siguientes correcciones previas fueron validadas como parte de esta investig
 
 ## Veredicto Final
 El sistema de exportación está listo para producción. La lógica es robusta, real y está correctamente integrada entre el frontend y el backend. No se requieren cambios adicionales de código para que la exportación funcione según lo especificado.
+
+## Anexo: Investigación de "Sin Nombre" en Clientes (24/01/2026)
+El usuario reportó que el PDF exportado mostraba "Sin Nombre" en la columna de clientes.
+**Hallazgo:** Se verificó directamente en la base de datos que las transacciones asociadas al colaborador "Patty" en el rango de fechas 2026-01-01 a 2026-01-24 tienen explícitamente el valor "Sin Nombre" en la columna `cliente`.
+**Evidencia:**
+- ID 2420 (19/01/2026): Cliente = "Sin Nombre"
+- ID 2401 (18/01/2026): Cliente = "Sin Nombre"
+- ID 2356 (14/01/2026): Cliente = "Sin Nombre"
+Esto confirma que no es un error de exportación, sino que los datos almacenados para este colaborador específico no tienen nombres de clientes registrados. Otros colaboradores (ej. Gabriel Zambrano) sí muestran nombres reales en el mismo periodo.
