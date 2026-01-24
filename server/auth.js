@@ -152,8 +152,13 @@ export const requireRole = (roles) => {
 
     const userRoles = Array.isArray(roles) ? roles : [roles];
     
-    // Mapear super_admin a admin para compatibilidad
-    const userRole = req.user.role === 'super_admin' ? 'admin' : req.user.role;
+    // Mapear super_admin a admin para compatibilidad, pero permitir super_admin explícitamente
+    // Si el rol es super_admin, tiene acceso a todo lo que admin y owner tienen
+    if (req.user.role === 'super_admin') {
+      return next();
+    }
+
+    const userRole = req.user.role;
 
     if (!userRoles.includes(userRole)) {
       return res.status(403).json({ 
