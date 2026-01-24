@@ -479,6 +479,7 @@ app.get('/api/dashboard/metrics', authenticateToken, requireRole(['admin', 'owne
     let totalTransactions = 0;
     let dailyVolume = 0;
     let activeCollaborators = 0;
+    let currentRateValue = 0;
 
     if (dbConnected) {
       try {
@@ -498,6 +499,19 @@ app.get('/api/dashboard/metrics', authenticateToken, requireRole(['admin', 'owne
         if (todayTxs) {
           dailyVolume = todayTxs.reduce((sum, tx) => sum + (tx.usd_total || 0), 0);
         }
+
+        // Obtener tasa actual
+        const { data: rateData } = await supabase
+          .from('global_rate')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (rateData && rateData.length > 0) {
+          // Soporte agnóstico de esquema (rate o cop_rate)
+          currentRateValue = rateData[0].rate || rateData[0].cop_rate || 0;
+        }
+
       } catch (err) {
         console.warn('Error obteniendo métricas de DB, usando defaults', err.message);
       }
@@ -507,7 +521,7 @@ app.get('/api/dashboard/metrics', authenticateToken, requireRole(['admin', 'owne
     res.json({
       totalTransactions,
       dailyVolume,
-      currentRate: 0, // Se llenará con la tasa actual si se implementa
+      currentRate: currentRateValue,
       activeCollaborators,
       systemStatus: 'active',
       pendingMessages: 0,
