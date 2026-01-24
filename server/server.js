@@ -478,6 +478,69 @@ app.get('/api/settings/security', authenticateToken, requireRole(['admin', 'owne
   }
 });
 
+// Endpoint de Información de Base de Datos (Faltante)
+app.get('/api/database/info', authenticateToken, requireRole(['admin', 'owner']), async (req, res) => {
+  try {
+    // Recopilar información básica de la base de datos
+    // En una implementación real con pg, podríamos consultar pg_database_size, etc.
+    // Con Supabase client, tenemos acceso limitado a metadatos, así que simulamos o inferimos.
+    
+    let tableStats = [];
+    let totalRecords = 0;
+    
+    if (dbConnected) {
+      // Intentar obtener conteos de tablas principales
+      const tables = ['transactions', 'clients', 'collaborators', 'system_logs', 'global_rate'];
+      
+      for (const table of tables) {
+        try {
+          const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true });
+          if (!error) {
+            tableStats.push({
+              name: table,
+              description: `Tabla de ${table}`,
+              records: count || 0,
+              status: 'active'
+            });
+            totalRecords += (count || 0);
+          } else {
+             tableStats.push({
+              name: table,
+              description: `Tabla de ${table}`,
+              records: 0,
+              status: 'error'
+            });
+          }
+        } catch (e) {
+           // Ignorar errores individuales
+        }
+      }
+    }
+    
+    const dbInfo = {
+      connection: {
+        host: process.env.SUPABASE_URL ? new URL(process.env.SUPABASE_URL).hostname : 'unknown',
+        port: '5432',
+        database: 'postgres',
+        poolSize: 10,
+        connected: dbConnected,
+        lastCheck: new Date().toISOString()
+      },
+      statistics: {
+        totalTables: tableStats.length,
+        totalRecords: totalRecords,
+        databaseSize: 'Unknown', // No accesible vía API simple
+        uptime: process.uptime()
+      },
+      tables: tableStats
+    };
+    
+    res.json(dbInfo);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Endpoint de Reportes (Faltante)
 app.get('/api/reports/summary', authenticateToken, async (req, res) => {
   try {
