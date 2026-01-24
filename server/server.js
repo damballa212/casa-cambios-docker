@@ -743,13 +743,104 @@ app.get('/api/collaborators', authenticateToken, async (req, res) => {
 
 app.get('/api/clients', authenticateToken, async (req, res) => {
   try {
-    const { data, error } = await supabase.from('clients').select('*');
-    if (error) {
-      if (error.code === '42P01') return res.json([]);
-      throw error;
+    // 1. Obtener clientes
+    const { data: clients, error: clientsError } = await supabase.from('clients').select('*');
+    
+    if (clientsError) {
+      if (clientsError.code === '42P01') return res.json([]);
+      throw clientsError;
     }
-    res.json(data);
+
+    // 2. Obtener todas las transacciones para calcular estadísticas
+    // Seleccionamos solo lo necesario para optimizar
+    const { data: transactions, error: txError } = await supabase
+      .from('transactions')
+      .select('cliente, usd_total, comision, created_at, fecha');
+
+    if (txError && txError.code !== '42P01') {
+      console.warn('Error fetching transactions for client stats:', txError);
+    }
+
+    // 3. Calcular métricas por cliente
+    const statsByClient = {};
+    
+    if (transactions) {
+      transactions.forEach(tx => {
+        const clientName = tx.cliente;
+        if (!clientName) return;
+
+        // Normalizar nombre para coincidir (si es necesario)
+        // Por ahora asumimos coincidencia exacta o case-insensitive si implementamos normalización
+        
+        if (!statsByClient[clientName]) {
+          statsByClient[clientName] = {
+            count: 0,
+            volumeUsd: 0,
+            commissions: 0,
+            lastDate: null
+          };
+        }
+
+        const usd = Number(tx.usd_total || 0);
+        const comision = Number(tx.comision || 0); // Si es %, esto no es monto. Ajustar si es necesario.
+        // Ojo: tx.comision suele ser porcentaje. Si queremos monto, calcularlo.
+        // Pero la interfaz dice 'totalCommissions'. 
+        // En AddTransactionModal: comisionUsd = usdTotal * (comision / 100)
+        const comisionMonto = usd * (comision / 100);
+
+        statsByClient[clientName].count++;
+        statsByClient[clientName].volumeUsd += usd;
+        statsByClient[clientName].commissions += comisionMonto;
+        
+        const txDate = new Date(tx.created_at || tx.fecha);
+        if (!statsByClient[clientName].lastDate || txDate > statsByClient[clientName].lastDate) {
+          statsByClient[clientName].lastDate = txDate;
+        }
+      });
+    }
+
+    // 4. Mapear resultados
+    const mappedClients = clients.map(client => {
+      // Buscar estadísticas por nombre de cliente
+      // Esto asume que 'client.name' coincide con 'transaction.cliente'
+      const stats = statsByClient[client.name] || { count: 0, volumeUsd: 0, commissions: 0, lastDate: null };
+      
+      // Calcular promedio
+      const avg = stats.count > 0 ? stats.volumeUsd / stats.count : 0;
+      
+      // Determinar estado basado en actividad reciente (ej. 30 días)
+      // O usar el estado de la base de datos si existe
+      let status = client.status || 'inactive';
+      
+      // Si tiene transacciones recientes (ej. últimos 30 días), marcar como activo si no tiene status definido
+      if (!client.status && stats.lastDate) {
+        const daysSinceLastTx = (new Date() - stats.lastDate) / (1000 * 60 * 60 * 24);
+        status = daysSinceLastTx <= 30 ? 'active' : 'inactive';
+      } else if (!client.status && stats.count > 0) {
+          // Si tiene transacciones pero antiguas, y no tiene status, quizás inactive
+          status = 'inactive';
+      } else if (!client.status) {
+          status = 'inactive';
+      }
+
+      return {
+        id: client.id,
+        name: client.name,
+        phone: client.phone || '',
+        email: client.email || '',
+        totalTransactions: stats.count,
+        totalVolumeUsd: stats.volumeUsd,
+        totalCommissions: stats.commissions,
+        averageTransaction: avg,
+        lastTransactionDate: stats.lastDate ? stats.lastDate.toISOString() : null, // Frontend espera string o null
+        status: status,
+        notes: client.notes || ''
+      };
+    });
+
+    res.json(mappedClients);
   } catch (error) {
+    console.error('Error fetching clients:', error);
     res.status(500).json({ error: error.message });
   }
 });

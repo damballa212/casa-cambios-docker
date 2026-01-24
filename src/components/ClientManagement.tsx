@@ -280,7 +280,7 @@ const ClientManagement: React.FC = () => {
                   <div className="flex items-center space-x-1">
                     <Calendar className="w-4 h-4 text-gray-400" />
                     <span className="font-medium text-gray-900 text-sm">
-                      {new Date(client.lastTransactionDate).toLocaleDateString()}
+                      {client.lastTransactionDate ? new Date(client.lastTransactionDate).toLocaleDateString() : 'Sin actividad'}
                     </span>
                   </div>
                 </div>
