@@ -234,11 +234,11 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="bg-white/70 rounded-lg p-4">
                   <div className="text-green-700 text-sm font-medium mb-1">USD Total</div>
-                  <div className="text-2xl font-bold text-green-900">${transaction.usdTotal.toFixed(2)}</div>
+                  <div className="text-2xl font-bold text-green-900">${(transaction.usdTotal || 0).toFixed(2)}</div>
                 </div>
                 <div className="bg-white/70 rounded-lg p-4">
                   <div className="text-green-700 text-sm font-medium mb-1">USD Neto</div>
-                  <div className="text-2xl font-bold text-green-900">${transaction.usdNeto.toFixed(2)}</div>
+                  <div className="text-2xl font-bold text-green-900">${(transaction.usdNeto || 0).toFixed(2)}</div>
                 </div>
                 <div className="bg-white/70 rounded-lg p-4">
                   <div className="text-green-700 text-sm font-medium mb-1">Comisión</div>

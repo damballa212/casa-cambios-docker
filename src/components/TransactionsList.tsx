@@ -917,7 +917,7 @@ const TransactionsList: React.FC = () => {
           
           // Formateo especial para ciertos campos en JSON
           if (field === 'gananciaGabriel' || field === 'gananciaColaborador' || field === 'usdTotal' || field === 'usdNeto') {
-            value = Number(value).toFixed(2);
+            value = (Number(value) || 0).toFixed(2);
           }
           
           item[displayName] = value;

@@ -252,7 +252,7 @@ const ReportsAnalytics: React.FC = () => {
       
       monthlyData.forEach(month => {
         rows.push([month.month, month.transactions.toString(), 
-                  `$${month.volume.toFixed(2)}`, `$${month.commissions?.toFixed(2) || '0.00'}`]);
+                  `$${(month.volume || 0).toFixed(2)}`, `$${(month.commissions || 0).toFixed(2)}`]);
       });
     }
     

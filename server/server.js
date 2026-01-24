@@ -451,9 +451,18 @@ app.get('/health', (req, res) => {
     version: process.env.npm_package_version || '1.0.0'
   };
   
-  // Si la BD está desconectada, devolver 503 pero con info
+  // Si la BD está desconectada, intentar reconectar una vez antes de fallar
   if (!dbConnected) {
-    return res.status(503).json(status);
+    supabase.from('global_rate').select('id').limit(1).then(({ error }) => {
+      if (!error) {
+        dbConnected = true;
+        status.database = 'connected';
+      }
+    });
+    
+    // Si sigue desconectada tras el intento (asíncrono, así que esto es optimista para la próxima)
+    // Para esta petición, retornamos 503 pero con el estado actualizado si tuvimos suerte en milisegundos anteriores
+    if (!dbConnected) return res.status(503).json(status);
   }
   
   res.json(status);
@@ -571,9 +580,9 @@ app.get('/api/transactions', authenticateToken, async (req, res) => {
       colaborador: tx.collaborator_name || tx.colaborador || 'Sin Colaborador',
       usdTotal: Number(tx.usd_total || tx.usdTotal || 0),
       comision: Number(tx.commission || tx.comision || 0),
-      usdNeto: Number(tx.usd_net || tx.usdNeto || 0),
-      montoGs: Number(tx.amount_gs || tx.montoGs || 0),
-      tasaUsada: Number(tx.exchange_rate || tx.tasaUsada || 0),
+      usdNeto: Number(tx.net_amount_usd || tx.usdNeto || tx.usd_neto || 0), // Added usd_neto
+      montoGs: Number(tx.amount_gs || tx.montoGs || tx.monto_gs || 0),      // Added monto_gs
+      tasaUsada: Number(tx.exchange_rate || tx.tasaUsada || tx.tasa_usada || 0), // Added tasa_usada
       status: tx.status || 'completed',
       chatId: tx.chat_id || tx.chatId,
       idempotencyKey: tx.idempotency_key
@@ -589,22 +598,57 @@ app.get('/api/transactions', authenticateToken, async (req, res) => {
 app.post('/api/transactions', authenticateToken, sensitiveOperationsRateLimiter, async (req, res) => {
   try {
     const txData = req.body;
-    // Mapear camelCase a snake_case para Supabase
+    // Mapear camelCase (frontend) a las columnas EXISTENTES de la BD (snake_case en español)
+    // Basado en inspección: id, idempotency_key, fecha, chat_id, colaborador, cliente, usd_total, comision, usd_neto, monto_gs, tasa_usada...
+    
+    // Calcular campos calculados si no vienen
+    const usdTotal = Number(txData.usdTotal || 0);
+    const tasaUsada = Number(txData.tasaUsada || 0);
+    const comision = Number(txData.comision || 0);
+    const montoGs = usdTotal * tasaUsada; // Cálculo básico
+    const usdNeto = usdTotal - comision;
+
     const dbData = {
-      client_name: txData.cliente,
-      collaborator_name: txData.colaborador,
-      usd_total: txData.usdTotal,
-      commission: txData.comision,
-      exchange_rate: txData.tasaUsada,
-      chat_id: txData.chatId,
-      created_by: req.user.id,
-      status: 'completed', // Por defecto
-      created_at: new Date()
+      cliente: txData.cliente,           // Columna DB: cliente
+      colaborador: txData.colaborador,   // Columna DB: colaborador
+      usd_total: usdTotal,               // Columna DB: usd_total
+      comision: comision,                // Columna DB: comision
+      tasa_usada: tasaUsada,             // Columna DB: tasa_usada
+      chat_id: txData.chatId,            // Columna DB: chat_id
+      fecha: new Date(),                 // Columna DB: fecha
+      created_at: new Date(),            // Columna DB: created_at
+      
+      // Campos calculados para consistencia
+      usd_neto: usdNeto,                 // Columna DB: usd_neto
+      monto_gs: montoGs,                 // Columna DB: monto_gs
+      
+      // Campos opcionales que podrían no existir en tablas antiguas, pero intentamos enviar si la migración corrió
+      // Si fallan, Supabase podría ignorarlos o dar error. 
+      // Idealmente correr migration_safe_additions.sql para agregar 'status' y 'created_by'
+      status: 'completed'
     };
+    
+    // Eliminar created_by si no estamos seguros que la columna existe, para evitar error 42703
+    // Pero si es vital, deberíamos asegurarnos con la migración.
+    // Por ahora, lo enviamos. Si falla, el usuario debe correr el script safe.
+    if (req.user && req.user.id) {
+       dbData['created_by'] = req.user.id; 
+    }
 
     const { data, error } = await supabase.from('transactions').insert([dbData]).select();
     
-    if (error) throw error;
+    if (error) {
+       // Si el error es por columna faltante (ej: status), reintentar sin esa columna
+       if (error.code === '42703') { // Undefined column
+          console.warn('⚠️ Error de columna faltante en insert, reintentando con esquema básico...', error.message);
+          delete dbData.status;
+          delete dbData.created_by;
+          const { data: retryData, error: retryError } = await supabase.from('transactions').insert([dbData]).select();
+          if (retryError) throw retryError;
+          return res.json({ success: true, message: 'Transacción creada (compatibilidad legacy)', transaction: retryData[0] });
+       }
+       throw error;
+    }
     
     // Respuesta formato frontend
     res.json({
