@@ -787,17 +787,22 @@ app.get('/api/clients', authenticateToken, async (req, res) => {
         // Intentar encontrar el nombre del cliente correspondiente
         let matchedClientName = txClientName;
 
-        // Si existe un cliente exacto, usarlo.
-        // Si no, intentar buscar si el nombre de la transacción es parte del nombre de un cliente (o viceversa)
-        // Esto ayuda con casos como "Abuelita" (tx) -> "Abuelita Novia" (cliente)
-        
-        if (!statsByClient[matchedClientName]) {
-             // Buscar coincidencia parcial si no existe entrada directa
-             const possibleMatch = Object.keys(clientNameMap).find(cName => 
+        // 1. Prioridad: Coincidencia EXACTA con un cliente existente
+        if (clientNameMap[txClientName]) {
+             matchedClientName = txClientName;
+        } 
+        // 2. Fallback: Coincidencia parcial (solo si no hay exacta)
+        else {
+             // Buscar coincidencia parcial
+             // Preferir la coincidencia más larga para evitar que "Abuelita" capture "Abuelita Novia"
+             const possibleMatches = Object.keys(clientNameMap).filter(cName => 
                  cName.includes(txClientName) || txClientName.includes(cName)
              );
-             if (possibleMatch) {
-                 matchedClientName = possibleMatch;
+             
+             if (possibleMatches.length > 0) {
+                 // Ordenar por longitud descendente (el más específico primero)
+                 possibleMatches.sort((a, b) => b.length - a.length);
+                 matchedClientName = possibleMatches[0];
              }
         }
 
