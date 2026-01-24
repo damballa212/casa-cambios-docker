@@ -283,8 +283,8 @@ app.delete('/api/users/:id', authenticateToken, requireRole(['owner']), sensitiv
   }
 });
 
-// Rutas protegidas de la aplicación
-app.get('/api/tasas', authenticateToken, apiRateLimiter, async (req, res) => {
+// Rutas de Tasas
+app.get('/api/rate/current', authenticateToken, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('global_rate')
@@ -299,34 +299,67 @@ app.get('/api/tasas', authenticateToken, apiRateLimiter, async (req, res) => {
   }
 });
 
-app.post('/api/tasas', authenticateToken, requireRole(['admin', 'owner']), async (req, res) => {
+app.get('/api/rate/history', authenticateToken, async (req, res) => {
   try {
-    const { cop_rate, bob_rate } = req.body;
+    const limit = parseInt(req.query.limit) || 50;
+    const { data, error } = await supabase
+      .from('global_rate')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    res.json(data || []);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/rate/update', authenticateToken, requireRole(['admin', 'owner']), async (req, res) => {
+  try {
+    const { rate } = req.body; // El frontend envía { rate: 123 }
+    // Asumimos que "rate" se refiere a cop_rate o bob_rate dependiendo del contexto,
+    // pero el frontend actual parece manejar una sola tasa principal o necesita enviar ambas.
+    // Ajustaremos para aceptar { cop_rate, bob_rate } o mapear "rate" a uno de ellos.
     
-    // Validación básica
-    if (cop_rate <= 0 || bob_rate <= 0) {
-      return res.status(400).json({ error: 'Las tasas deben ser mayores a 0' });
-    }
+    // Si el frontend envía solo "rate", asumimos que es una actualización simplificada.
+    // Pero para robustez, vamos a ver qué envía exactamente el frontend en api.ts.
+    // api.ts: updateRate(rate: number) -> body: { rate }
+    // Esto es ambiguo si hay dos tasas. Asumiremos que es la tasa principal (ej. COP).
+    // O mejor, actualizamos el endpoint para ser flexible.
+    
+    const cop_rate = req.body.cop_rate || req.body.rate;
+    const bob_rate = req.body.bob_rate || 0; // O mantener la anterior...
+
+    // Para evitar romper la lógica de dos tasas, consultamos la última para mantener la otra si falta
+    const { data: lastRate } = await supabase.from('global_rate').select('*').order('created_at', { ascending: false }).limit(1).single();
+    
+    const finalCopRate = cop_rate || lastRate?.cop_rate || 0;
+    const finalBobRate = bob_rate || lastRate?.bob_rate || 0;
 
     const { data, error } = await supabase
       .from('global_rate')
       .insert([{ 
-        cop_rate, 
-        bob_rate,
+        cop_rate: finalCopRate, 
+        bob_rate: finalBobRate,
         updated_by: req.user.id 
       }])
       .select();
 
     if (error) throw error;
     
-    logOperations.rateUpdate(req.user.id, { cop: cop_rate, bob: bob_rate });
+    logOperations.rateUpdate(req.user.id, { cop: finalCopRate, bob: finalBobRate });
     
-    // Notificar cambio importante si la variación es grande (pendiente implementar lógica de comparación)
-    
-    res.json(data[0]);
+    res.json({ success: true, message: 'Tasa actualizada correctamente', data: data[0] });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// Rutas protegidas de la aplicación (Legacy /api/tasas si es necesario, o redirigir)
+app.get('/api/tasas', authenticateToken, apiRateLimiter, async (req, res) => {
+  // ... lógica existente ...
+  res.redirect('/api/rate/current');
 });
 
 // Endpoint para Logs del Sistema
