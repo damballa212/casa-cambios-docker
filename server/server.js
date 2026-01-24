@@ -148,8 +148,8 @@ app.post('/api/auth/login', loginRateLimiter, async (req, res) => {
     }
     
     // Generar tokens
-    const accessToken = generateAccessToken(user);
-    const refreshToken = await createUserSession(user.id, req.ip, req.get('user-agent'));
+    const { token, jti } = generateAccessToken(user);
+    const refreshToken = await createUserSession(user.id, jti, req.ip, req.get('user-agent'));
     
     // El log de éxito ya se maneja dentro de authenticateUser
     
@@ -162,7 +162,7 @@ app.post('/api/auth/login', loginRateLimiter, async (req, res) => {
         role: user.role,
         full_name: user.full_name
       },
-      accessToken,
+      accessToken: token,
       refreshToken
     });
     
