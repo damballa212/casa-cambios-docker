@@ -193,7 +193,7 @@ const RateManager: React.FC<RateManagerProps> = ({ currentRate, onRateUpdate }) 
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        entry.change.startsWith('+') 
+                        (entry.change || '').startsWith('+') 
                           ? 'bg-green-100 text-green-800' 
                           : 'bg-red-100 text-red-800'
                       }`}>

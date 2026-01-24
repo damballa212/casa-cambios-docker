@@ -438,7 +438,7 @@ const TransactionsList: React.FC = () => {
       console.log('Config de exportación:', config);
       
       // Verificar si hay transacciones del 30/9 en los datos finales
-      const sept30Transactions = dataToExport.filter(t => t.fecha.startsWith('2025-09-30'));
+      const sept30Transactions = dataToExport.filter(t => (t.fecha || '').startsWith('2025-09-30'));
       if (sept30Transactions.length > 0) {
         console.log('🚨 PROBLEMA: Transacciones del 30/9 en datos finales:', sept30Transactions.length);
         sept30Transactions.forEach(t => {

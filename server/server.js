@@ -75,7 +75,7 @@ try {
   console.log('🔧 Configurando conexión con Supabase API...');
   
   // Probar conexión simple
-  supabase.from('global_rate').select('count').limit(1).then(({ data, error }) => {
+  supabase.from('global_rate').select('id').limit(1).then(({ data, error }) => {
     if (error) {
       console.error('❌ Error conectando con Supabase API:', error.message);
       dbConnected = false;
@@ -337,18 +337,51 @@ app.post('/api/rate/update', authenticateToken, requireRole(['admin', 'owner']),
     const finalCopRate = cop_rate || lastRate?.cop_rate || 0;
     const finalBobRate = bob_rate || lastRate?.bob_rate || 0;
 
+    // Detectar qué columnas tiene la tabla para saber qué insertar
+    // Por seguridad, intentamos insertar 'rate' si existe, o 'cop_rate' si es el nuevo esquema
+    // Como no podemos consultar el esquema fácilmente, probaremos insertar 'rate' que es el legacy seguro
+    // O mejor, verificamos si la tabla tiene cop_rate en el GET anterior, pero aquí es POST.
+    
+    // ESTRATEGIA SEGURA: Intentar insertar con el esquema que sabemos que funciona (migration.sql dice 'rate')
+    // Si queremos soportar ambos, necesitaríamos saber el esquema.
+    // Asumiremos 'rate' como principal por el migration.sql
+    
+    const insertData = {
+      rate: finalCopRate, // Usamos la tasa principal como 'rate'
+      updated_at: new Date()
+      // updated_by no existe en migration.sql para global_rate, verificar si agregarlo
+    };
+    
+    // Verificar si migration.sql tiene updated_by. NO LO TIENE.
+    // Tabla: id, rate, updated_at, created_at.
+    
     const { data, error } = await supabase
       .from('global_rate')
-      .insert([{ 
-        cop_rate: finalCopRate, 
-        bob_rate: finalBobRate,
-        updated_by: req.user.id 
-      }])
+      .insert([insertData])
       .select();
 
-    if (error) throw error;
+    if (error) {
+      // Si falla porque no existe 'rate' (quizás es el esquema nuevo), intentamos con cop_rate
+      if (error.message.includes('column "rate" does not exist')) {
+         console.log('⚠️ Tabla global_rate parece usar nuevo esquema, reintentando con cop_rate...');
+         const { data: data2, error: error2 } = await supabase
+          .from('global_rate')
+          .insert([{ 
+            cop_rate: finalCopRate, 
+            bob_rate: finalBobRate,
+            updated_by: req.user.id 
+          }])
+          .select();
+          
+         if (error2) throw error2;
+         
+         logOperations.rateUpdate(req.user.id, { cop: finalCopRate, bob: finalBobRate });
+         return res.json({ success: true, message: 'Tasa actualizada correctamente', data: data2[0] });
+      }
+      throw error;
+    }
     
-    logOperations.rateUpdate(req.user.id, { cop: finalCopRate, bob: finalBobRate });
+    logOperations.rateUpdate(req.user.id, { rate: finalCopRate });
     
     res.json({ success: true, message: 'Tasa actualizada correctamente', data: data[0] });
   } catch (error) {
