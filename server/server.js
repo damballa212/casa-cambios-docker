@@ -754,9 +754,11 @@ app.get('/api/clients', authenticateToken, async (req, res) => {
     // 2. Obtener todas las transacciones para calcular estadísticas
     // Seleccionamos solo lo necesario para optimizar
     // Aumentamos el límite para asegurar que traemos todas las transacciones (Supabase default es 1000)
+    // IMPORTANTE: Ordenar por fecha descendente para asegurar que traemos las más recientes
     const { data: transactions, error: txError } = await supabase
       .from('transactions')
       .select('cliente, usd_total, comision, created_at, fecha')
+      .order('created_at', { ascending: false })
       .limit(10000); // Límite seguro para el volumen actual
 
     if (txError && txError.code !== '42P01') {
