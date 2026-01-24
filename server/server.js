@@ -725,7 +725,9 @@ app.get('/api/collaborators', authenticateToken, async (req, res) => {
         txCount: stats.count,
         totalCommissionUsd: stats.commissionUsd,
         totalCommissionGs: stats.commissionGs,
-        status: c.status || 'active'
+        status: c.status || 'active',
+        isOwner: c.is_owner || false,
+        rules: c.rules || ''
       };
     });
     
