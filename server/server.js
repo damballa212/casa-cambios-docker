@@ -766,6 +766,12 @@ app.get('/api/clients', authenticateToken, async (req, res) => {
     // 3. Calcular métricas por cliente
     const statsByClient = {};
     
+    // Crear un mapa de nombres de clientes normalizados para búsqueda rápida
+    const clientNameMap = {};
+    clients.forEach(c => {
+      if (c.name) clientNameMap[c.name.trim().toLowerCase()] = c.name;
+    });
+
     console.log(`🔍 Stats Debug: Procesando ${transactions ? transactions.length : 0} transacciones para ${clients.length} clientes.`);
 
     if (transactions) {
@@ -773,16 +779,28 @@ app.get('/api/clients', authenticateToken, async (req, res) => {
         const clientNameRaw = tx.cliente;
         if (!clientNameRaw) return;
 
-        // Normalizar nombre para coincidir (trim y lowerCase para evitar mismatches)
-        const clientName = clientNameRaw.trim().toLowerCase();
+        // Normalizar nombre de la transacción
+        const txClientName = clientNameRaw.trim().toLowerCase();
         
-        // Debug específico para Abuelita Novia
-        if (clientName.includes('abuelita')) {
-             console.log(`Found transaction for ${clientName}: USD=${tx.usd_total}, Date=${tx.created_at}`);
+        // Intentar encontrar el nombre del cliente correspondiente
+        let matchedClientName = txClientName;
+
+        // Si existe un cliente exacto, usarlo.
+        // Si no, intentar buscar si el nombre de la transacción es parte del nombre de un cliente (o viceversa)
+        // Esto ayuda con casos como "Abuelita" (tx) -> "Abuelita Novia" (cliente)
+        
+        if (!statsByClient[matchedClientName]) {
+             // Buscar coincidencia parcial si no existe entrada directa
+             const possibleMatch = Object.keys(clientNameMap).find(cName => 
+                 cName.includes(txClientName) || txClientName.includes(cName)
+             );
+             if (possibleMatch) {
+                 matchedClientName = possibleMatch;
+             }
         }
 
-        if (!statsByClient[clientName]) {
-          statsByClient[clientName] = {
+        if (!statsByClient[matchedClientName]) {
+          statsByClient[matchedClientName] = {
             count: 0,
             volumeUsd: 0,
             commissions: 0,
@@ -792,18 +810,16 @@ app.get('/api/clients', authenticateToken, async (req, res) => {
 
         const usd = Number(tx.usd_total || 0);
         const comision = Number(tx.comision || 0);
-        // En AddTransactionModal: comisionUsd = usdTotal * (comision / 100)
         const comisionMonto = usd * (comision / 100);
 
-        statsByClient[clientName].count++;
-        statsByClient[clientName].volumeUsd += usd;
-        statsByClient[clientName].commissions += comisionMonto;
+        statsByClient[matchedClientName].count++;
+        statsByClient[matchedClientName].volumeUsd += usd;
+        statsByClient[matchedClientName].commissions += comisionMonto;
         
         const txDate = new Date(tx.created_at || tx.fecha);
-        // Validar que la fecha sea válida
         if (!isNaN(txDate.getTime())) {
-            if (!statsByClient[clientName].lastDate || txDate > statsByClient[clientName].lastDate) {
-              statsByClient[clientName].lastDate = txDate;
+            if (!statsByClient[matchedClientName].lastDate || txDate > statsByClient[matchedClientName].lastDate) {
+              statsByClient[matchedClientName].lastDate = txDate;
             }
         }
       });
@@ -815,10 +831,6 @@ app.get('/api/clients', authenticateToken, async (req, res) => {
       const clientNameNorm = (client.name || '').trim().toLowerCase();
       
       const stats = statsByClient[clientNameNorm] || { count: 0, volumeUsd: 0, commissions: 0, lastDate: null };
-      
-      if (clientNameNorm.includes('abuelita')) {
-          console.log(`Mapping client ${client.name} (norm: ${clientNameNorm}) -> Stats found: ${JSON.stringify(stats)}`);
-      }
       
       // Calcular promedio
       const avg = stats.count > 0 ? stats.volumeUsd / stats.count : 0;
