@@ -431,11 +431,107 @@ app.get('/api/logs', authenticateToken, requireRole(['admin', 'owner']), async (
     
     const { data, error } = await query;
     
-    if (error) throw error;
+    if (error) {
+      if (error.code === '42P01') return res.json([]);
+      throw error;
+    }
     res.json(data);
   } catch (error) {
     console.error('Error fetching logs:', error);
     res.status(500).json({ error: 'Error obteniendo logs' });
+  }
+});
+
+// Endpoint de Configuración General (Faltante)
+app.get('/api/settings/general', authenticateToken, async (req, res) => {
+  try {
+    // Retornar configuración por defecto o desde DB si existiera
+    res.json({
+      systemName: 'Sistema de Cambios',
+      timezone: 'America/Asuncion',
+      primaryCurrency: 'USD',
+      autoUpdatesEnabled: false
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoint de Reportes (Faltante)
+app.get('/api/reports/summary', authenticateToken, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    let query = supabase.from('transactions').select('usd_total, comision, colaborador, cliente');
+    
+    if (startDate) {
+      query = query.gte('created_at', startDate);
+    }
+    if (endDate) {
+      query = query.lte('created_at', endDate);
+    }
+    
+    const { data: transactions, error } = await query;
+    
+    if (error) {
+       if (error.code === '42P01') {
+         return res.json({
+            totalTransactions: 0,
+            totalVolumeUsd: 0,
+            totalCommissions: 0,
+            averageTransaction: 0,
+            topCollaborator: 'N/A',
+            topClient: 'N/A'
+         });
+       }
+       throw error;
+    }
+    
+    const stats = {
+        totalTransactions: transactions.length,
+        totalVolumeUsd: 0,
+        totalCommissions: 0,
+        averageTransaction: 0,
+        topCollaborator: 'N/A',
+        topClient: 'N/A'
+    };
+    
+    const collaboratorCounts = {};
+    const clientVolumes = {};
+    
+    transactions.forEach(tx => {
+        const usd = Number(tx.usd_total || 0);
+        const comision = Number(tx.comision || 0);
+        const comisionMonto = usd * (comision / 100);
+        
+        stats.totalVolumeUsd += usd;
+        stats.totalCommissions += comisionMonto;
+        
+        // Count for top collaborator
+        const collab = tx.colaborador || 'Desconocido';
+        collaboratorCounts[collab] = (collaboratorCounts[collab] || 0) + 1;
+        
+        // Volume for top client
+        const client = tx.cliente || 'Desconocido';
+        clientVolumes[client] = (clientVolumes[client] || 0) + usd;
+    });
+    
+    if (stats.totalTransactions > 0) {
+        stats.averageTransaction = stats.totalVolumeUsd / stats.totalTransactions;
+        
+        // Find top collaborator
+        stats.topCollaborator = Object.entries(collaboratorCounts)
+            .sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A';
+            
+        // Find top client
+        stats.topClient = Object.entries(clientVolumes)
+            .sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A';
+    }
+    
+    res.json(stats);
+  } catch (error) {
+    console.error('Error fetching reports summary:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
