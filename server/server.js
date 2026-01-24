@@ -742,8 +742,18 @@ app.get('/api/dashboard/metrics', authenticateToken, requireRole(['admin', 'owne
         const { count: txCount } = await supabase.from('transactions').select('*', { count: 'exact', head: true });
         totalTransactions = txCount || 0;
         
-        const { count: colCount } = await supabase.from('collaborators').select('*', { count: 'exact', head: true }).eq('status', 'active');
-        activeCollaborators = colCount || 0;
+        const { count: colCount, error: countError } = await supabase
+          .from('collaborators')
+          .select('*', { count: 'exact', head: true })
+          .or('status.eq.active,status.is.null'); // Contar activos o nulos (default active)
+          
+        if (countError) {
+           // Si falla el OR (quizás versión vieja de PostgREST), intentar solo contar todos
+           const { count: totalCount } = await supabase.from('collaborators').select('*', { count: 'exact', head: true });
+           activeCollaborators = totalCount || 0;
+        } else {
+           activeCollaborators = colCount || 0;
+        }
         
         // Volumen diario (aproximado)
         const today = new Date().toISOString().split('T')[0];
