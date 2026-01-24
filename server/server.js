@@ -1153,8 +1153,8 @@ app.use('/api/backups/*', (req, res, next) => {
 app.post('/api/backups/create', authenticateToken, requireRole(['admin', 'owner']), sensitiveOperationsRateLimiter, async (req, res) => {
   try {
     console.log('📥 req.body:', req.body);
-    // Importar dinámicamente para evitar dependencias circulares si las hubiera
-    const { createBackup } = await import('./backupService.js');
+    // Importar dinámicamente para evitar dependencias circulares
+    const { createBackup } = await import('./backup-system.js');
     
     const type = req.body.type || 'full'; // 'full', 'db_only', 'logs_only'
     
@@ -1186,7 +1186,7 @@ app.post('/api/backups/create', authenticateToken, requireRole(['admin', 'owner'
 // Listar backups
 app.get('/api/backups', authenticateToken, requireRole(['admin', 'owner']), async (req, res) => {
   try {
-    const { listBackups } = await import('./backupService.js');
+    const { listBackups } = await import('./backup-system.js');
     const backups = await listBackups();
     res.json(backups);
   } catch (error) {
@@ -1197,7 +1197,7 @@ app.get('/api/backups', authenticateToken, requireRole(['admin', 'owner']), asyn
 // Restaurar backup
 app.post('/api/backups/restore/:id', authenticateToken, requireRole(['owner']), sensitiveOperationsRateLimiter, async (req, res) => {
   try {
-    const { restoreBackup } = await import('./backupService.js');
+    const { restoreBackup } = await import('./backup-system.js');
     const backupId = req.params.id;
     
     logger.warn('Iniciando restauración de backup', { 
@@ -1222,18 +1222,96 @@ app.post('/api/backups/restore/:id', authenticateToken, requireRole(['owner']), 
 // Descargar backup
 app.get('/api/backups/download/:filename', authenticateToken, requireRole(['admin', 'owner']), async (req, res) => {
   try {
-    const { getBackupPath } = await import('./backupService.js');
-    const filename = req.params.filename;
-    const filePath = getBackupPath(filename);
+    const { backupSystem } = await import('./backup-system.js');
+    // backupSystem no exporta getBackupPath directamente, pero podemos construirlo o usar un método si existiera.
+    // Revisando backup-system.js, no tiene getBackupPath público, pero usa BACKUP_CONFIG.backupDir.
+    // Asumiremos que están en ../backups relativo a este archivo.
+    const path = await import('path');
+    const fs = await import('fs');
+    const { fileURLToPath } = await import('url');
     
-    res.download(filePath, filename, (err) => {
-      if (err) {
-        logger.error('Error descargando backup', { error: err.message, filename });
-        if (!res.headersSent) {
-          res.status(404).json({ error: 'Archivo no encontrado' });
-        }
-      }
-    });
+    // Reconstruir ruta de backups (copiado de logic en backup-system.js)
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const backupDir = process.env.BACKUP_DIR || path.join(__dirname, '../backups');
+    
+    const filename = req.params.filename;
+    // Sanitizar filename para evitar path traversal
+    const safeFilename = path.basename(filename);
+    const filePath = path.join(backupDir, safeFilename);
+    
+    if (fs.existsSync(filePath)) {
+       res.download(filePath, safeFilename);
+    } else {
+       logger.error('Error descargando backup', { error: 'Archivo no encontrado', filename });
+       res.status(404).json({ error: 'Archivo no encontrado' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- RUTAS DE CONFIGURACIÓN DE BACKUPS (NUEVAS) ---
+
+// Obtener configuraciones
+app.get('/api/backups/configurations', authenticateToken, requireRole(['admin', 'owner']), async (req, res) => {
+  try {
+    const { backupConfigManager } = await import('./backupConfigManager.js');
+    const configs = await backupConfigManager.getAll();
+    res.json({ success: true, configurations: configs });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Crear configuración
+app.post('/api/backups/configurations', authenticateToken, requireRole(['admin', 'owner']), async (req, res) => {
+  try {
+    const { backupConfigManager } = await import('./backupConfigManager.js');
+    const newConfig = await backupConfigManager.create(req.body);
+    
+    // Notificar al scheduler para recargar (opcional, si implementamos recarga dinámica)
+    const { backupScheduler } = await import('./scheduler.js');
+    if (backupScheduler) {
+        // Recargar configuraciones
+        // backupScheduler.loadAndScheduleConfigurations(); 
+        // Esto requeriría modificar scheduler.js para leer del JSON también.
+    }
+    
+    res.json({ success: true, message: 'Configuración creada', configuration: newConfig });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Actualizar configuración
+app.put('/api/backups/configurations/:id', authenticateToken, requireRole(['admin', 'owner']), async (req, res) => {
+  try {
+    const { backupConfigManager } = await import('./backupConfigManager.js');
+    const updated = await backupConfigManager.update(req.params.id, req.body);
+    res.json({ success: true, message: 'Configuración actualizada', configuration: updated });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Eliminar configuración
+app.delete('/api/backups/configurations/:id', authenticateToken, requireRole(['admin', 'owner']), async (req, res) => {
+  try {
+    const { backupConfigManager } = await import('./backupConfigManager.js');
+    await backupConfigManager.delete(req.params.id);
+    res.json({ success: true, message: 'Configuración eliminada' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Limpiar backups antiguos
+app.post('/api/backups/cleanup', authenticateToken, requireRole(['admin', 'owner']), async (req, res) => {
+  try {
+    const { backupSystem } = await import('./backup-system.js');
+    await backupSystem.cleanupOldBackups();
+    res.json({ success: true, message: 'Limpieza completada' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
