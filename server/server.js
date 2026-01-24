@@ -159,6 +159,7 @@ app.post('/api/auth/login', loginRateLimiter, async (req, res) => {
     logAuthEvent('login_success', { userId: user.id, username: user.username });
     
     res.json({
+      success: true,
       user: {
         id: user.id,
         username: user.username,
