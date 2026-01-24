@@ -811,6 +811,26 @@ app.get('/api/transactions', authenticateToken, async (req, res) => {
     // Implementación básica con Supabase
     let query = supabase.from('transactions').select('*').order('created_at', { ascending: false });
     
+    // Extraer filtros del query string
+    const { start, end, collaborator, client, status, minUsd, maxUsd } = req.query;
+
+    // Aplicar filtro de fechas
+    if (start && end) {
+      // Asegurar rango inclusivo para todo el día
+      const startDate = `${start}T00:00:00`;
+      const endDate = `${end}T23:59:59`;
+      query = query.gte('fecha', startDate).lte('fecha', endDate);
+    }
+
+    // Aplicar filtros exactos
+    if (collaborator) query = query.eq('colaborador', collaborator);
+    if (client) query = query.eq('cliente', client);
+    if (status) query = query.eq('status', status);
+
+    // Aplicar filtros numéricos
+    if (minUsd) query = query.gte('usd_total', minUsd);
+    if (maxUsd) query = query.lte('usd_total', maxUsd);
+
     // Aplicar filtros si existen (limit, etc)
     if (req.query.limit) {
       query = query.limit(parseInt(req.query.limit));
@@ -842,7 +862,10 @@ app.get('/api/transactions', authenticateToken, async (req, res) => {
       tasaUsada: Number(tx.exchange_rate || tx.tasaUsada || tx.tasa_usada || 0), // Added tasa_usada
       status: tx.status || 'completed',
       chatId: tx.chat_id || tx.chatId,
-      idempotencyKey: tx.idempotency_key
+      idempotencyKey: tx.idempotency_key,
+      // Nuevos campos para reportes y PDF
+      montoColaboradorUsd: Number(tx.monto_colaborador_usd || 0),
+      montoComisionGabrielUsd: Number(tx.monto_comision_gabriel_usd || 0)
     }));
 
     res.json(mappedData);
