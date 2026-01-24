@@ -133,18 +133,18 @@ app.use((req, res, next) => {
 // Rutas de autenticación
 app.post('/api/auth/login', loginRateLimiter, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { username, password } = req.body;
     
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email y contraseña requeridos' });
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
     }
     
     // Autenticar usuario
-    const { user, error } = await authenticateUser(email, password);
+    const { user, error } = await authenticateUser(username, password);
     
     if (error || !user) {
       // Registrar intento fallido
-      logAuthEvent('login_failed', { email, reason: error || 'Credenciales inválidas' });
+      logAuthEvent('login_failed', { username, reason: error || 'Credenciales inválidas' });
       
       // Notificar si es necesario (lógica manejada en auth.js o aquí si se desea explícita)
       
@@ -156,11 +156,12 @@ app.post('/api/auth/login', loginRateLimiter, async (req, res) => {
     const refreshToken = await createUserSession(user.id, req.ip, req.get('user-agent'));
     
     // Registrar éxito
-    logAuthEvent('login_success', { userId: user.id, email: user.email });
+    logAuthEvent('login_success', { userId: user.id, username: user.username });
     
     res.json({
       user: {
         id: user.id,
+        username: user.username,
         email: user.email,
         role: user.role,
         full_name: user.full_name
