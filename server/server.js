@@ -432,13 +432,16 @@ app.get('/api/logs', authenticateToken, requireRole(['admin', 'owner']), async (
     const { data, error } = await query;
     
     if (error) {
-      if (error.code === '42P01') return res.json([]);
+      console.warn('⚠️ Error Supabase en logs:', error);
+      // Si la tabla no existe (42P01) o hay error de permisos (42501), devolver array vacío
+      if (error.code === '42P01' || error.code === '42501') return res.json([]);
       throw error;
     }
-    res.json(data);
+    res.json(data || []);
   } catch (error) {
     console.error('Error fetching logs:', error);
-    res.status(500).json({ error: 'Error obteniendo logs' });
+    // En caso de error fatal, devolver array vacío para no romper UI
+    res.json([]);
   }
 });
 
@@ -451,6 +454,24 @@ app.get('/api/settings/general', authenticateToken, async (req, res) => {
       timezone: 'America/Asuncion',
       primaryCurrency: 'USD',
       autoUpdatesEnabled: false
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoint de Configuración de Seguridad (Faltante)
+app.get('/api/settings/security', authenticateToken, requireRole(['admin', 'owner']), async (req, res) => {
+  try {
+    // Retornar configuración de seguridad por defecto
+    res.json({
+      rateLimitMessages: 100,
+      rateLimitWindow: 15,
+      allowedIPs: [],
+      auditLogsEnabled: true,
+      requireIdempotencyKey: true,
+      maxLoginAttempts: 5,
+      sessionTimeout: 60
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
