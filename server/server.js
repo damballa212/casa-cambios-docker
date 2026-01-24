@@ -668,22 +668,66 @@ app.post('/api/transactions', authenticateToken, sensitiveOperationsRateLimiter,
 
 app.get('/api/collaborators', authenticateToken, async (req, res) => {
   try {
-    const { data, error } = await supabase.from('collaborators').select('*');
+    // 1. Obtener colaboradores
+    const { data: collaborators, error: collabError } = await supabase.from('collaborators').select('*');
     
-    if (error) {
-      if (error.code === '42P01') return res.json([]);
-      throw error;
+    if (collabError) {
+      if (collabError.code === '42P01') return res.json([]);
+      throw collabError;
+    }
+
+    // 2. Obtener transacciones para calcular totales en tiempo real
+    const { data: transactions, error: txError } = await supabase
+      .from('transactions')
+      .select('colaborador, usd_total, comision, monto_gs');
+
+    if (txError && txError.code !== '42P01') {
+      console.warn('Error fetching transactions for stats:', txError);
+    }
+
+    // 3. Calcular métricas por colaborador
+    const statsByCollaborator = {};
+    
+    if (transactions) {
+      transactions.forEach(tx => {
+        const name = tx.colaborador; 
+        if (!name) return;
+
+        if (!statsByCollaborator[name]) {
+          statsByCollaborator[name] = { count: 0, commissionUsd: 0, commissionGs: 0 };
+        }
+
+        const usdTotal = Number(tx.usd_total || 0);
+        const comisionPct = Number(tx.comision || 0);
+        
+        // Comisión generada = USD Total * (Porcentaje / 100)
+        const commissionAmountUsd = usdTotal * (comisionPct / 100);
+        
+        // Comisión en Gs
+        const montoGs = Number(tx.monto_gs || 0);
+        const commissionAmountGs = montoGs * (comisionPct / 100);
+
+        statsByCollaborator[name].count++;
+        statsByCollaborator[name].commissionUsd += commissionAmountUsd;
+        statsByCollaborator[name].commissionGs += commissionAmountGs;
+      });
     }
     
-    // Mapeo
-    const mapped = data.map(c => ({
-      id: c.id,
-      name: c.name,
-      basePct: c.base_pct,
-      txCount: c.tx_count || 0,
-      totalCommissionUsd: c.total_commission_usd || 0,
-      status: c.status || 'active'
-    }));
+    // 4. Mapear resultados
+    const mapped = collaborators.map(c => {
+      const stats = statsByCollaborator[c.name] || { count: 0, commissionUsd: 0, commissionGs: 0 };
+      
+      return {
+        id: c.id,
+        name: c.name,
+        basePct: c.base_pct,
+        // Usar cálculo en tiempo real
+        txCount: stats.count,
+        totalCommissionUsd: stats.commissionUsd,
+        totalCommissionGs: stats.commissionGs,
+        status: c.status || 'active'
+      };
+    });
     
     res.json(mapped);
   } catch (error) {
