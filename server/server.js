@@ -309,7 +309,25 @@ app.get('/api/rate/history', authenticateToken, async (req, res) => {
       .limit(limit);
 
     if (error) throw error;
-    res.json(data || []);
+
+    // Mapear datos para coincidir con la interfaz RateHistory del frontend
+    const mappedData = (data || []).map((item, index, arr) => {
+      // Calcular cambio respecto al registro anterior (que es el siguiente en el array por el sort desc)
+      const nextItem = arr[index + 1];
+      const currentRate = item.rate || item.cop_rate || 0;
+      const prevRate = nextItem ? (nextItem.rate || nextItem.cop_rate || 0) : currentRate;
+      const diff = currentRate - prevRate;
+      const sign = diff > 0 ? '+' : '';
+      
+      return {
+        date: item.created_at || item.updated_at || new Date().toISOString(),
+        rate: currentRate,
+        change: `${sign}${diff}`,
+        user: 'Admin' // Placeholder hasta implementar join con users
+      };
+    });
+
+    res.json(mappedData);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
