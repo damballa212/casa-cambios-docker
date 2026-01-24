@@ -766,6 +766,8 @@ app.get('/api/clients', authenticateToken, async (req, res) => {
     // 3. Calcular métricas por cliente
     const statsByClient = {};
     
+    console.log(`🔍 Stats Debug: Procesando ${transactions ? transactions.length : 0} transacciones para ${clients.length} clientes.`);
+
     if (transactions) {
       transactions.forEach(tx => {
         const clientNameRaw = tx.cliente;
@@ -774,6 +776,11 @@ app.get('/api/clients', authenticateToken, async (req, res) => {
         // Normalizar nombre para coincidir (trim y lowerCase para evitar mismatches)
         const clientName = clientNameRaw.trim().toLowerCase();
         
+        // Debug específico para Abuelita Novia
+        if (clientName.includes('abuelita')) {
+             console.log(`Found transaction for ${clientName}: USD=${tx.usd_total}, Date=${tx.created_at}`);
+        }
+
         if (!statsByClient[clientName]) {
           statsByClient[clientName] = {
             count: 0,
@@ -808,6 +815,10 @@ app.get('/api/clients', authenticateToken, async (req, res) => {
       const clientNameNorm = (client.name || '').trim().toLowerCase();
       
       const stats = statsByClient[clientNameNorm] || { count: 0, volumeUsd: 0, commissions: 0, lastDate: null };
+      
+      if (clientNameNorm.includes('abuelita')) {
+          console.log(`Mapping client ${client.name} (norm: ${clientNameNorm}) -> Stats found: ${JSON.stringify(stats)}`);
+      }
       
       // Calcular promedio
       const avg = stats.count > 0 ? stats.volumeUsd / stats.count : 0;
