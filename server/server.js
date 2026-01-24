@@ -214,6 +214,14 @@ app.post('/api/auth/logout', async (req, res) => {
   }
 });
 
+// Verificar token válido (usado por frontend para checkear sesión)
+app.get('/api/auth/verify', authenticateToken, (req, res) => {
+  res.json({ 
+    valid: true, 
+    user: req.user 
+  });
+});
+
 app.get('/api/auth/me', authenticateToken, (req, res) => {
   res.json({ user: req.user });
 });
@@ -460,14 +468,14 @@ app.get('/api/transactions', authenticateToken, async (req, res) => {
     // Asumimos que la DB tiene campos similares o mapeamos aquí
     const mappedData = data.map(tx => ({
       id: tx.id,
-      fecha: tx.created_at || tx.fecha,
-      cliente: tx.client_name || tx.cliente, // Fallback
-      colaborador: tx.collaborator_name || tx.colaborador,
-      usdTotal: tx.usd_total || tx.usdTotal,
-      comision: tx.commission || tx.comision,
-      usdNeto: tx.usd_net || tx.usdNeto,
-      montoGs: tx.amount_gs || tx.montoGs,
-      tasaUsada: tx.exchange_rate || tx.tasaUsada,
+      fecha: tx.created_at || tx.fecha || new Date().toISOString(), // Fallback a fecha actual si no hay fecha
+      cliente: tx.client_name || tx.cliente || 'Sin Cliente',
+      colaborador: tx.collaborator_name || tx.colaborador || 'Sin Colaborador',
+      usdTotal: Number(tx.usd_total || tx.usdTotal || 0),
+      comision: Number(tx.commission || tx.comision || 0),
+      usdNeto: Number(tx.usd_net || tx.usdNeto || 0),
+      montoGs: Number(tx.amount_gs || tx.montoGs || 0),
+      tasaUsada: Number(tx.exchange_rate || tx.tasaUsada || 0),
       status: tx.status || 'completed',
       chatId: tx.chat_id || tx.chatId,
       idempotencyKey: tx.idempotency_key
