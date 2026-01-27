@@ -942,6 +942,100 @@ app.post('/api/transactions', authenticateToken, sensitiveOperationsRateLimiter,
   }
 });
 
+// Eliminar transacción con debugging profesional
+app.delete('/api/transactions/:id', authenticateToken, requireRole(['admin', 'owner']), async (req, res) => {
+  // Importar el debugger dinámicamente para evitar problemas de inicialización
+  const { debugTransactionDeletion, transactionDebugger } = await import('./database-debug.js');
+  
+  let debugResult = null;
+  const startTime = Date.now();
+  
+  try {
+    if (!supabase) {
+      throw new Error('Supabase client not initialized');
+    }
+    
+    const { id } = req.params;
+    const userId = req.user?.username || 'unknown';
+    
+    // 🔍 INICIO DEL DEBUGGING PROFESIONAL
+    await logger.info(COMPONENTS.TRANSACTION, `🚀 INICIANDO ELIMINACIÓN PROFESIONAL`, {
+      transactionId: id,
+      userId,
+      userAgent: req.headers['user-agent'],
+      ip: req.ip,
+      timestamp: new Date().toISOString()
+    });
+
+    // 1. Verificar existencia antes de borrar
+    const { data: existing, error: checkError } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (checkError || !existing) {
+      await logger.warn(COMPONENTS.TRANSACTION, `⚠️ Transacción no encontrada para eliminar`, { id });
+      return res.status(404).json({ error: 'Transacción no encontrada' });
+    }
+
+    // 2. Ejecutar debugging avanzado
+    try {
+      debugResult = await transactionDebugger.debugTransactionDeletion(id, userId);
+      await logger.info(COMPONENTS.TRANSACTION, `✅ Debugging completado`, { debugResult });
+    } catch (debugError) {
+      await logger.error(COMPONENTS.TRANSACTION, `⚠️ Error en debugging (no crítico)`, { error: debugError.message });
+    }
+
+    // 3. Eliminar transacción
+    const { error: deleteError } = await supabase
+      .from('transactions')
+      .delete()
+      .eq('id', id);
+
+    if (deleteError) {
+      throw deleteError;
+    }
+
+    // 4. Verificar eliminación
+    const { count } = await supabase
+      .from('transactions')
+      .select('*', { count: 'exact', head: true })
+      .eq('id', id);
+
+    if (count > 0) {
+      throw new Error('La transacción no se eliminó correctamente');
+    }
+
+    // 5. Log final de éxito
+    await logger.success(COMPONENTS.TRANSACTION, `🗑️ Transacción eliminada exitosamente`, {
+      id,
+      userId,
+      duration: `${Date.now() - startTime}ms`
+    });
+
+    res.json({ 
+      success: true, 
+      message: 'Transacción eliminada correctamente',
+      debug: debugResult 
+    });
+
+  } catch (error) {
+    console.error('Error deleting transaction:', error);
+    
+    await logger.error(COMPONENTS.TRANSACTION, `❌ Error eliminando transacción`, {
+      id: req.params.id,
+      error: error.message,
+      stack: error.stack
+    });
+    
+    res.status(500).json({ 
+      error: 'Error eliminando transacción', 
+      message: error.message 
+    });
+  }
+});
+
 // ==========================================
 // RUTAS DE COLABORADORES (Faltantes)
 // ==========================================
