@@ -109,8 +109,6 @@ const DATE_PRESETS = [
   { value: 'thismonth', label: 'Este mes' },
   { value: 'lastmonth', label: 'Mes pasado' },
   { value: 'thisyear', label: 'Este año' },
-  { value: 'custom_month', label: 'Mes Específico' },
-  { value: 'custom_year', label: 'Año Específico' },
   { value: 'custom', label: 'Rango personalizado' }
 ];
 
@@ -208,6 +206,7 @@ const ExportModal: React.FC<ExportModalProps> = ({
   const [currentStep, setCurrentStep] = useState(1);
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
+  const [customRangeType, setCustomRangeType] = useState<'dates' | 'month' | 'year'>('dates');
   
   // Estados para configuraciones guardadas
   const [savedConfigurations, setSavedConfigurations] = useState<SavedExportConfig[]>([]);
@@ -281,8 +280,6 @@ const ExportModal: React.FC<ExportModalProps> = ({
         end = today;
         break;
       case 'custom':
-      case 'custom_month':
-      case 'custom_year':
         setExportConfig(prev => ({
           ...prev,
           dateRange: {
@@ -551,92 +548,151 @@ const ExportModal: React.FC<ExportModalProps> = ({
                 </div>
                 
                 {exportConfig.dateRange.preset === 'custom' && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Fecha inicio</label>
-                      <input
-                        type="date"
-                        value={exportConfig.dateRange.start}
-                        onChange={(e) => setExportConfig(prev => ({
-                          ...prev,
-                          dateRange: { ...prev.dateRange, start: e.target.value }
-                        }))}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                      />
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-200/50 mt-4">
+                    {/* Tabs de Tipo de Rango */}
+                    <div className="flex space-x-2 mb-4 p-1 bg-gray-200/50 rounded-lg w-fit">
+                      <button
+                        onClick={() => setCustomRangeType('dates')}
+                        className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 ${
+                          customRangeType === 'dates'
+                            ? 'bg-white text-green-700 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                        }`}
+                      >
+                        Por Fechas
+                      </button>
+                      <button
+                        onClick={() => setCustomRangeType('month')}
+                        className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 ${
+                          customRangeType === 'month'
+                            ? 'bg-white text-green-700 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                        }`}
+                      >
+                        Por Mes
+                      </button>
+                      <button
+                        onClick={() => setCustomRangeType('year')}
+                        className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 ${
+                          customRangeType === 'year'
+                            ? 'bg-white text-green-700 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                        }`}
+                      >
+                        Por Año
+                      </button>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Fecha fin</label>
-                      <input
-                        type="date"
-                        value={exportConfig.dateRange.end}
-                        onChange={(e) => setExportConfig(prev => ({
-                          ...prev,
-                          dateRange: { ...prev.dateRange, end: e.target.value }
-                        }))}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                      />
-                    </div>
-                  </div>
-                )}
 
-                {/* Selector de Mes Específico */}
-                {exportConfig.dateRange.preset === 'custom_month' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Seleccionar Mes</label>
-                    <input
-                      type="month"
-                      onChange={(e) => {
-                        if (!e.target.value) return;
-                        const [year, month] = e.target.value.split('-').map(Number);
-                        const startDate = new Date(year, month - 1, 1);
-                        const endDate = new Date(year, month, 0);
-                        
-                        setExportConfig(prev => ({
-                          ...prev,
-                          dateRange: {
-                            ...prev.dateRange,
-                            start: startDate.toISOString().split('T')[0],
-                            end: endDate.toISOString().split('T')[0]
-                          }
-                        }));
-                      }}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                    <p className="mt-1 text-xs text-gray-500">
-                      Se exportarán todas las transacciones del mes seleccionado.
-                    </p>
-                  </div>
-                )}
+                    {/* Selector Por Fechas Exactas */}
+                    {customRangeType === 'dates' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Fecha inicio</label>
+                          <input
+                            type="date"
+                            value={exportConfig.dateRange.start}
+                            onChange={(e) => setExportConfig(prev => ({
+                              ...prev,
+                              dateRange: { ...prev.dateRange, start: e.target.value }
+                            }))}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Fecha fin</label>
+                          <input
+                            type="date"
+                            value={exportConfig.dateRange.end}
+                            onChange={(e) => setExportConfig(prev => ({
+                              ...prev,
+                              dateRange: { ...prev.dateRange, end: e.target.value }
+                            }))}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                          />
+                        </div>
+                      </div>
+                    )}
 
-                {/* Selector de Año Específico */}
-                {exportConfig.dateRange.preset === 'custom_year' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Seleccionar Año</label>
-                    <select
-                      onChange={(e) => {
-                        const year = parseInt(e.target.value);
-                        const startDate = new Date(year, 0, 1);
-                        const endDate = new Date(year, 11, 31);
-                        
-                        setExportConfig(prev => ({
-                          ...prev,
-                          dateRange: {
-                            ...prev.dateRange,
-                            start: startDate.toISOString().split('T')[0],
-                            end: endDate.toISOString().split('T')[0]
-                          }
-                        }));
-                      }}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                      defaultValue={new Date().getFullYear()}
-                    >
-                      {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
-                        <option key={year} value={year}>{year}</option>
-                      ))}
-                    </select>
-                    <p className="mt-1 text-xs text-gray-500">
-                      Se exportarán todas las transacciones del año seleccionado.
-                    </p>
+                    {/* Selector Por Mes (Año + Mes) */}
+                    {customRangeType === 'month' && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Año</label>
+                          <select 
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                            onChange={(e) => {
+                                const year = parseInt(e.target.value);
+                                const currentStart = new Date(exportConfig.dateRange.start);
+                                const month = currentStart.getMonth();
+                                const startDate = new Date(year, month, 1);
+                                const endDate = new Date(year, month + 1, 0);
+                                setExportConfig(prev => ({
+                                  ...prev,
+                                  dateRange: { ...prev.dateRange, start: startDate.toISOString().split('T')[0], end: endDate.toISOString().split('T')[0] }
+                                }));
+                            }}
+                            value={new Date(exportConfig.dateRange.start).getFullYear()}
+                          >
+                            {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                              <option key={y} value={y}>{y}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Mes</label>
+                          <select 
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                            onChange={(e) => {
+                                const month = parseInt(e.target.value);
+                                const year = new Date(exportConfig.dateRange.start).getFullYear();
+                                const startDate = new Date(year, month, 1);
+                                const endDate = new Date(year, month + 1, 0);
+                                setExportConfig(prev => ({
+                                  ...prev,
+                                  dateRange: { ...prev.dateRange, start: startDate.toISOString().split('T')[0], end: endDate.toISOString().split('T')[0] }
+                                }));
+                            }}
+                            value={new Date(exportConfig.dateRange.start).getMonth()}
+                          >
+                            {['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'].map((m, i) => (
+                              <option key={i} value={i}>{m}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="col-span-2">
+                           <p className="text-xs text-gray-500 bg-blue-50 p-2 rounded text-center">
+                             Exportando: {new Date(exportConfig.dateRange.start).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
+                           </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Selector Por Año Completo */}
+                    {customRangeType === 'year' && (
+                       <div>
+                         <label className="block text-sm font-medium text-gray-700 mb-2">Seleccionar Año</label>
+                         <select 
+                           className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                           onChange={(e) => {
+                               const year = parseInt(e.target.value);
+                               const startDate = new Date(year, 0, 1);
+                               const endDate = new Date(year, 11, 31);
+                               setExportConfig(prev => ({
+                                 ...prev,
+                                 dateRange: { ...prev.dateRange, start: startDate.toISOString().split('T')[0], end: endDate.toISOString().split('T')[0] }
+                               }));
+                           }}
+                           value={new Date(exportConfig.dateRange.start).getFullYear()}
+                         >
+                           {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                             <option key={y} value={y}>{y}</option>
+                           ))}
+                         </select>
+                         <p className="mt-2 text-xs text-gray-500 bg-blue-50 p-2 rounded">
+                           Se exportarán todas las transacciones del año {new Date(exportConfig.dateRange.start).getFullYear()}.
+                         </p>
+                       </div>
+                    )}
                   </div>
                 )}
               </div>
