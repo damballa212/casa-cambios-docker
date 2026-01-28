@@ -109,6 +109,8 @@ const DATE_PRESETS = [
   { value: 'thismonth', label: 'Este mes' },
   { value: 'lastmonth', label: 'Mes pasado' },
   { value: 'thisyear', label: 'Este año' },
+  { value: 'custom_month', label: 'Mes Específico' },
+  { value: 'custom_year', label: 'Año Específico' },
   { value: 'custom', label: 'Rango personalizado' }
 ];
 
@@ -279,7 +281,16 @@ const ExportModal: React.FC<ExportModalProps> = ({
         end = today;
         break;
       case 'custom':
-        return; // No cambiar las fechas para rango personalizado
+      case 'custom_month':
+      case 'custom_year':
+        setExportConfig(prev => ({
+          ...prev,
+          dateRange: {
+            ...prev.dateRange,
+            preset
+          }
+        }));
+        return; // No cambiar las fechas automáticamente, esperar input del usuario
     }
 
     setExportConfig(prev => ({
@@ -565,6 +576,67 @@ const ExportModal: React.FC<ExportModalProps> = ({
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                       />
                     </div>
+                  </div>
+                )}
+
+                {/* Selector de Mes Específico */}
+                {exportConfig.dateRange.preset === 'custom_month' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Seleccionar Mes</label>
+                    <input
+                      type="month"
+                      onChange={(e) => {
+                        if (!e.target.value) return;
+                        const [year, month] = e.target.value.split('-').map(Number);
+                        const startDate = new Date(year, month - 1, 1);
+                        const endDate = new Date(year, month, 0);
+                        
+                        setExportConfig(prev => ({
+                          ...prev,
+                          dateRange: {
+                            ...prev.dateRange,
+                            start: startDate.toISOString().split('T')[0],
+                            end: endDate.toISOString().split('T')[0]
+                          }
+                        }));
+                      }}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Se exportarán todas las transacciones del mes seleccionado.
+                    </p>
+                  </div>
+                )}
+
+                {/* Selector de Año Específico */}
+                {exportConfig.dateRange.preset === 'custom_year' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Seleccionar Año</label>
+                    <select
+                      onChange={(e) => {
+                        const year = parseInt(e.target.value);
+                        const startDate = new Date(year, 0, 1);
+                        const endDate = new Date(year, 11, 31);
+                        
+                        setExportConfig(prev => ({
+                          ...prev,
+                          dateRange: {
+                            ...prev.dateRange,
+                            start: startDate.toISOString().split('T')[0],
+                            end: endDate.toISOString().split('T')[0]
+                          }
+                        }));
+                      }}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                      defaultValue={new Date().getFullYear()}
+                    >
+                      {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                        <option key={year} value={year}>{year}</option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Se exportarán todas las transacciones del año seleccionado.
+                    </p>
                   </div>
                 )}
               </div>
