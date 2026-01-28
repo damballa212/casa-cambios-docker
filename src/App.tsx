@@ -40,6 +40,7 @@ function App() {
   // Datos en tiempo real desde la API
   const [realTimeData, setRealTimeData] = useState<DashboardMetricsType>({
     totalTransactions: 0,
+    transactionsToday: 0,
     dailyVolume: 0,
     currentRate: 7300,
     activeCollaborators: 3,

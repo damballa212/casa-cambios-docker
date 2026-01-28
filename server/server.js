@@ -733,6 +733,7 @@ app.get('/api/dashboard/metrics', authenticateToken, requireRole(['admin', 'owne
 
     // Obtener métricas de negocio reales (si existen tablas)
     let totalTransactions = 0;
+    let transactionsToday = 0;
     let dailyVolume = 0;
     let activeCollaborators = 0;
     let currentRateValue = 0;
@@ -764,6 +765,7 @@ app.get('/api/dashboard/metrics', authenticateToken, requireRole(['admin', 'owne
           
         if (todayTxs) {
           dailyVolume = todayTxs.reduce((sum, tx) => sum + (tx.usd_total || 0), 0);
+          transactionsToday = todayTxs.length;
         }
 
         // Obtener tasa actual
@@ -786,6 +788,7 @@ app.get('/api/dashboard/metrics', authenticateToken, requireRole(['admin', 'owne
     // Estructura esperada por DashboardMetrics en frontend
     res.json({
       totalTransactions,
+      transactionsToday,
       dailyVolume,
       currentRate: currentRateValue,
       activeCollaborators,

@@ -12,6 +12,7 @@ import {
 interface DashboardMetricsProps {
   data: {
     totalTransactions: number;
+    transactionsToday?: number;
     dailyVolume: number;
     currentRate: number;
     activeCollaborators: number;
@@ -28,7 +29,7 @@ const DashboardMetrics: React.FC<DashboardMetricsProps> = ({ data, backendConnec
   const metrics = [
     {
       title: 'Transacciones Hoy',
-      value: data.totalTransactions.toString(),
+      value: (data.transactionsToday ?? 0).toString(),
       change: '0%',
       positive: true,
       icon: DollarSign,

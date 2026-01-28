@@ -48,6 +48,7 @@ export interface Collaborator {
 
 export interface DashboardMetrics {
   totalTransactions: number;
+  transactionsToday?: number;
   dailyVolume: number;
   currentRate: number;
   activeCollaborators: number;
