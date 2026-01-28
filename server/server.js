@@ -813,16 +813,26 @@ app.get('/api/dashboard/metrics', authenticateToken, requireRole(['admin', 'owne
         
         // Volumen diario (aproximado)
         const { startUtcIso, endUtcIso } = getDayRangeUtcForTimeZone(new Date(), APP_TIMEZONE);
-        const { data: todayTxs } = await supabase
+        const { data: todayCreated } = await supabase
           .from('transactions')
-          .select('usd_total')
+          .select('id, usd_total, created_at')
           .gte('created_at', startUtcIso)
           .lt('created_at', endUtcIso);
-          
-        if (todayTxs) {
-          dailyVolume = todayTxs.reduce((sum, tx) => sum + (tx.usd_total || 0), 0);
-          transactionsToday = todayTxs.length;
-        }
+        const { data: todayFecha } = await supabase
+          .from('transactions')
+          .select('id, usd_total, fecha')
+          .gte('fecha', startUtcIso)
+          .lt('fecha', endUtcIso);
+        const txMap = new Map();
+        (todayCreated || []).forEach(tx => {
+          if (tx && tx.id !== undefined) txMap.set(tx.id, tx);
+        });
+        (todayFecha || []).forEach(tx => {
+          if (tx && tx.id !== undefined) txMap.set(tx.id, { ...(txMap.get(tx.id) || {}), ...tx });
+        });
+        const merged = Array.from(txMap.values());
+        transactionsToday = merged.length;
+        dailyVolume = merged.reduce((sum, tx) => sum + (Number(tx.usd_total) || 0), 0);
 
         // Obtener tasa actual
         const { data: rateData } = await supabase
