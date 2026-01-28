@@ -50,6 +50,61 @@ import multer from 'multer';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const APP_TIMEZONE = process.env.APP_TIMEZONE || 'America/Asuncion';
+
+const getDatePartsInTimeZone = (date, timeZone) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date);
+  const map = {};
+  parts.forEach(part => {
+    if (part.type !== 'literal') map[part.type] = part.value;
+  });
+  return {
+    year: Number(map.year),
+    month: Number(map.month),
+    day: Number(map.day)
+  };
+};
+
+const getTimeZoneOffsetMinutes = (date, timeZone) => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  }).formatToParts(date);
+  const map = {};
+  parts.forEach(part => {
+    if (part.type !== 'literal') map[part.type] = part.value;
+  });
+  const asUTC = Date.UTC(
+    Number(map.year),
+    Number(map.month) - 1,
+    Number(map.day),
+    Number(map.hour),
+    Number(map.minute),
+    Number(map.second)
+  );
+  return (asUTC - date.getTime()) / 60000;
+};
+
+const getDayRangeUtcForTimeZone = (date, timeZone) => {
+  const { year, month, day } = getDatePartsInTimeZone(date, timeZone);
+  const startUtc = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+  const offsetMinutes = getTimeZoneOffsetMinutes(startUtc, timeZone);
+  startUtc.setUTCMinutes(startUtc.getUTCMinutes() - offsetMinutes);
+  const endUtc = new Date(startUtc);
+  endUtc.setUTCDate(endUtc.getUTCDate() + 1);
+  return { startUtcIso: startUtc.toISOString(), endUtcIso: endUtc.toISOString() };
+};
 
 // Configurar middlewares básicos ANTES de las rutas
 app.use(cors({
@@ -757,11 +812,12 @@ app.get('/api/dashboard/metrics', authenticateToken, requireRole(['admin', 'owne
         }
         
         // Volumen diario (aproximado)
-        const today = new Date().toISOString().split('T')[0];
+        const { startUtcIso, endUtcIso } = getDayRangeUtcForTimeZone(new Date(), APP_TIMEZONE);
         const { data: todayTxs } = await supabase
           .from('transactions')
           .select('usd_total')
-          .gte('created_at', today);
+          .gte('created_at', startUtcIso)
+          .lt('created_at', endUtcIso);
           
         if (todayTxs) {
           dailyVolume = todayTxs.reduce((sum, tx) => sum + (tx.usd_total || 0), 0);
