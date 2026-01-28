@@ -835,16 +835,24 @@ app.get('/api/dashboard/metrics', authenticateToken, requireRole(['admin', 'owne
         dailyVolume = merged.reduce((sum, tx) => sum + (Number(tx.usd_total) || 0), 0);
 
         if (transactionsToday === 0) {
-          const { data: recent } = await supabase
+          const { data: recentByCreated } = await supabase
             .from('transactions')
             .select('id, usd_total, created_at, fecha')
             .order('created_at', { ascending: false })
-            .limit(200);
-          const sameDay = (recent || []).filter(tx => {
+            .limit(500);
+          const { data: recentByFecha } = await supabase
+            .from('transactions')
+            .select('id, usd_total, created_at, fecha')
+            .order('fecha', { ascending: false })
+            .limit(500);
+          const m = new Map();
+          (recentByCreated || []).forEach(tx => { if (tx && tx.id !== undefined) m.set(tx.id, tx); });
+          (recentByFecha || []).forEach(tx => { if (tx && tx.id !== undefined) m.set(tx.id, { ...(m.get(tx.id) || {}), ...tx }); });
+          const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: APP_TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+          const sameDay = Array.from(m.values()).filter(tx => {
             const d = new Date(tx.created_at || tx.fecha);
-            const a = new Intl.DateTimeFormat('en-CA', { timeZone: APP_TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
-            const b = new Intl.DateTimeFormat('en-CA', { timeZone: APP_TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-            return a === b;
+            const s = new Intl.DateTimeFormat('en-CA', { timeZone: APP_TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+            return s === todayStr;
           });
           transactionsToday = sameDay.length;
           dailyVolume = sameDay.reduce((sum, tx) => sum + (Number(tx.usd_total) || 0), 0);
