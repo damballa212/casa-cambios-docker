@@ -56,6 +56,9 @@ const TransactionsList: React.FC = () => {
   // Sistema de notificaciones
   const { addNotification } = useNotifications();
   
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [totalCount, setTotalCount] = useState(0);
   // Función para eliminar transacción
   const handleDeleteTransaction = (transactionId: string) => {
     const transaction = transactions.find(t => t.id === transactionId);
@@ -140,39 +143,44 @@ const TransactionsList: React.FC = () => {
     const fetchTransactions = async () => {
       try {
         setLoading(true);
-        const data = await apiService.getTransactions();
-        // Usar ganancias reales de la base de datos
-        const transactionsWithGanancia = data.map((transaction: Transaction) => {
-          return {
-            ...transaction,
-            gananciaGabriel: transaction.montoComisionGabrielUsd || 0,
-            gananciaColaborador: transaction.montoColaboradorUsd || 0
-          };
-        });
+        const params: any = { page, limit: pageSize };
+        if (filters.dateRange.start && filters.dateRange.end) {
+          params.start = filters.dateRange.start;
+          params.end = filters.dateRange.end;
+        }
+        if (filters.collaborator) params.collaborator = filters.collaborator;
+        if (filters.client) params.client = filters.client;
+        if (filters.status) params.status = filters.status;
+        if (filters.amountRange.min !== null) params.minUsd = filters.amountRange.min;
+        if (filters.amountRange.max !== null) params.maxUsd = filters.amountRange.max;
+
+        const { data, count } = await apiService.getTransactionsPaged(params);
+        const transactionsWithGanancia = data.map((transaction: Transaction) => ({
+          ...transaction,
+          gananciaGabriel: transaction.montoComisionGabrielUsd || 0,
+          gananciaColaborador: transaction.montoColaboradorUsd || 0
+        }));
         setTransactions(transactionsWithGanancia);
+        setFilteredTransactions(transactionsWithGanancia);
+        setTotalCount(count || 0);
         setError(null);
       } catch (err) {
         console.error('Error fetching transactions:', err);
         setError('Error al cargar las transacciones');
-        // Sin datos de fallback - mostrar error
-         setTransactions([]);
-       } finally {
-         setLoading(false);
-       }
-     };
-
-     fetchTransactions();
-   }, []);
+        setTransactions([]);
+        setFilteredTransactions([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTransactions();
+  }, [page, pageSize, filters]);
 
   // Aplicar filtros avanzados
   useEffect(() => {
     setIsFilterLoading(true);
-    
-    // Simular delay para mostrar loading
     const filterTimeout = setTimeout(() => {
       let filtered = transactions;
-
-      // Filtro de búsqueda
       if (filters.search) {
         const searchLower = filters.search.toLowerCase();
         filtered = filtered.filter(transaction =>
@@ -183,91 +191,11 @@ const TransactionsList: React.FC = () => {
           (transaction.montoGs || 0).toString().includes(searchLower)
         );
       }
-
-      // Filtro de rango de fechas
-      if (filters.dateRange.start || filters.dateRange.end) {
-        filtered = filtered.filter(transaction => {
-          const transactionDate = new Date(transaction.fecha).toISOString().split('T')[0];
-          const startDate = filters.dateRange.start;
-          const endDate = filters.dateRange.end;
-          
-          if (startDate && endDate) {
-            return transactionDate >= startDate && transactionDate <= endDate;
-          } else if (startDate) {
-            return transactionDate >= startDate;
-          } else if (endDate) {
-            return transactionDate <= endDate;
-          }
-          return true;
-        });
-      }
-
-      // Filtro de colaborador
-      if (filters.collaborator) {
-        filtered = filtered.filter(transaction => transaction.colaborador === filters.collaborator);
-      }
-
-      // Filtro de cliente
-      if (filters.client) {
-        filtered = filtered.filter(transaction => transaction.cliente === filters.client);
-      }
-
-      // Filtro de estado
-      if (filters.status) {
-        filtered = filtered.filter(transaction => transaction.status === filters.status);
-      }
-
-      // Filtro de rango de monto
-      if (filters.amountRange.min !== null || filters.amountRange.max !== null) {
-        filtered = filtered.filter(transaction => {
-          const amount = transaction.usdTotal;
-          if (filters.amountRange.min !== null && filters.amountRange.max !== null) {
-            return amount >= filters.amountRange.min && amount <= filters.amountRange.max;
-          } else if (filters.amountRange.min !== null) {
-            return amount >= filters.amountRange.min;
-          } else if (filters.amountRange.max !== null) {
-            return amount <= filters.amountRange.max;
-          }
-          return true;
-        });
-      }
-
-      // Filtro de rango de comisión
-      if (filters.commissionRange.min !== null || filters.commissionRange.max !== null) {
-        filtered = filtered.filter(transaction => {
-          const commission = transaction.comision;
-          if (filters.commissionRange.min !== null && filters.commissionRange.max !== null) {
-            return commission >= filters.commissionRange.min && commission <= filters.commissionRange.max;
-          } else if (filters.commissionRange.min !== null) {
-            return commission >= filters.commissionRange.min;
-          } else if (filters.commissionRange.max !== null) {
-            return commission <= filters.commissionRange.max;
-          }
-          return true;
-        });
-      }
-
-      // Filtro de rango de tasa
-      if (filters.rateRange.min !== null || filters.rateRange.max !== null) {
-        filtered = filtered.filter(transaction => {
-          const rate = transaction.tasaUsada;
-          if (filters.rateRange.min !== null && filters.rateRange.max !== null) {
-            return rate >= filters.rateRange.min && rate <= filters.rateRange.max;
-          } else if (filters.rateRange.min !== null) {
-            return rate >= filters.rateRange.min;
-          } else if (filters.rateRange.max !== null) {
-            return rate <= filters.rateRange.max;
-          }
-          return true;
-        });
-      }
-
       setFilteredTransactions(filtered);
       setIsFilterLoading(false);
     }, 300);
-
     return () => clearTimeout(filterTimeout);
-  }, [transactions, filters]);
+  }, [transactions, filters.search]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -459,8 +387,22 @@ const TransactionsList: React.FC = () => {
       // Generar y descargar archivo según el formato
       switch (config.format) {
         case 'csv':
-          const csvContent = generateCSV(dataToExport, config);
-          downloadFile(csvContent, `${baseFilename}.csv`, 'text/csv');
+          if (config.dateRange && config.dateRange.start && config.dateRange.end) {
+            const blob = await apiService.exportTransactionsCSV({
+              start: config.dateRange.start,
+              end: config.dateRange.end,
+              collaborator: config.filters?.collaborator,
+              client: config.filters?.client,
+              status: config.filters?.status,
+              minUsd: config.filters?.minAmount,
+              maxUsd: config.filters?.maxAmount,
+              fields: config.fields
+            });
+            downloadFile(blob, `${baseFilename}.csv`, 'text/csv');
+          } else {
+            const csvContent = generateCSV(dataToExport, config);
+            downloadFile(csvContent, `${baseFilename}.csv`, 'text/csv');
+          }
           break;
           
         case 'excel':
@@ -1627,7 +1569,7 @@ const TransactionsList: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total Transacciones</p>
-              <p className="text-2xl font-bold text-gray-900">{filteredTransactions.length}</p>
+              <p className="text-2xl font-bold text-gray-900">{totalCount}</p>
             </div>
             <CheckCircle className="w-8 h-8 text-blue-500" />
           </div>
@@ -1668,6 +1610,21 @@ const TransactionsList: React.FC = () => {
       </div>
       )}
       
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <button onClick={() => setPage(p => Math.max(1, p - 1))} className="px-3 py-2 border rounded">Anterior</button>
+          <span className="text-sm">Página {page}</span>
+          <button onClick={() => setPage(p => p + 1)} disabled={(page * pageSize) >= totalCount} className="px-3 py-2 border rounded disabled:opacity-50">Siguiente</button>
+        </div>
+        <div>
+          <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }} className="px-3 py-2 border rounded">
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+        </div>
+      </div>
+
       {/* Transaction Detail Modal */}
       <TransactionDetailModal
         isOpen={isDetailModalOpen}
@@ -1701,7 +1658,7 @@ const TransactionsList: React.FC = () => {
            const reloadTransactions = async () => {
              try {
                setLoading(true);
-               const data = await apiService.getTransactions();
+               const { data, count } = await apiService.getTransactionsPaged({ page, limit: pageSize });
                const transactionsWithGanancia = data.map((transaction: Transaction) => ({
                  ...transaction,
                  // Mapear ganancias desde los campos del servidor
@@ -1709,11 +1666,14 @@ const TransactionsList: React.FC = () => {
                  gananciaColaborador: transaction.montoColaboradorUsd ?? 0
                }));
                setTransactions(transactionsWithGanancia);
+               setFilteredTransactions(transactionsWithGanancia);
+               setTotalCount(count || 0);
                setError(null);
              } catch (err: any) {
                console.error('Error fetching transactions:', err);
                setError(err.message);
                setTransactions([]);
+               setFilteredTransactions([]);
              } finally {
                setLoading(false);
              }

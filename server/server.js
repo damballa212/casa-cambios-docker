@@ -968,6 +968,150 @@ app.get('/api/transactions', authenticateToken, async (req, res) => {
   }
 });
 
+app.get('/api/transactions/paged', authenticateToken, async (req, res) => {
+  try {
+    let page = parseInt(req.query.page) || 1;
+    let limit = parseInt(req.query.limit) || 50;
+    if (limit > 200) limit = 200;
+    if (page < 1) page = 1;
+
+    let base = supabase.from('transactions').select('*', { count: 'exact' }).order('created_at', { ascending: false });
+
+    const { start, end, collaborator, client, status, minUsd, maxUsd } = req.query;
+
+    if (start && end) {
+      const startDate = `${start}T00:00:00Z`;
+      const endDate = `${end}T23:59:59Z`;
+      base = base.gte('fecha', startDate).lte('fecha', endDate);
+    }
+
+    if (collaborator) base = base.eq('colaborador', collaborator);
+    if (client) base = base.eq('cliente', client);
+    if (status) base = base.eq('status', status);
+
+    if (minUsd) base = base.gte('usd_total', minUsd);
+    if (maxUsd) base = base.lte('usd_total', maxUsd);
+
+    const offset = (page - 1) * limit;
+    const rangeEnd = offset + limit - 1;
+    const ranged = base.range(offset, rangeEnd);
+
+    const { data, error, count } = await ranged;
+    if (error) {
+      if (error.code === '42P01') {
+        return res.json({ data: [], count: 0, page, limit, hasNextPage: false, hasPrevPage: page > 1 });
+      }
+      throw error;
+    }
+
+    const mappedData = (data || []).map(tx => ({
+      id: tx.id,
+      fecha: tx.created_at || tx.fecha || new Date().toISOString(),
+      cliente: tx.client_name || tx.cliente || 'Sin Cliente',
+      colaborador: tx.collaborator_name || tx.colaborador || 'Sin Colaborador',
+      usdTotal: Number(tx.usd_total || tx.usdTotal || 0),
+      comision: Number(tx.commission || tx.comision || 0),
+      usdNeto: Number(tx.net_amount_usd || tx.usdNeto || tx.usd_neto || 0),
+      montoGs: Number(tx.amount_gs || tx.montoGs || tx.monto_gs || 0),
+      tasaUsada: Number(tx.exchange_rate || tx.tasaUsada || tx.tasa_usada || 0),
+      status: tx.status || 'completed',
+      chatId: tx.chat_id || tx.chatId,
+      idempotencyKey: tx.idempotency_key,
+      montoColaboradorUsd: Number(tx.monto_colaborador_usd || 0),
+      montoComisionGabrielUsd: Number(tx.monto_comision_gabriel_usd || 0)
+    }));
+
+    res.json({
+      data: mappedData,
+      count: count || 0,
+      page,
+      limit,
+      hasNextPage: count ? offset + mappedData.length < count : false,
+      hasPrevPage: page > 1
+    });
+  } catch (error) {
+    console.error('Error fetching transactions (paged):', error);
+    res.status(500).json({ error: 'Error al obtener transacciones paginadas' });
+  }
+});
+
+app.get('/api/transactions/export', authenticateToken, requireRole(['admin', 'owner']), async (req, res) => {
+  try {
+    const format = (req.query.format || 'csv').toString();
+    const fields = Array.isArray(req.query.fields) ? req.query.fields : (req.query.fields ? [req.query.fields] : ['id','fecha','cliente','colaborador','usdTotal','comision','status']);
+
+    let base = supabase.from('transactions').select('*', { count: 'exact' }).order('created_at', { ascending: false });
+    const { start, end, collaborator, client, status, minUsd, maxUsd } = req.query;
+
+    if (start && end) {
+      const startDate = `${start}T00:00:00Z`;
+      const endDate = `${end}T23:59:59Z`;
+      base = base.gte('fecha', startDate).lte('fecha', endDate);
+    }
+    if (collaborator) base = base.eq('colaborador', collaborator);
+    if (client) base = base.eq('cliente', client);
+    if (status) base = base.eq('status', status);
+    if (minUsd) base = base.gte('usd_total', minUsd);
+    if (maxUsd) base = base.lte('usd_total', maxUsd);
+
+    const { count, error } = await base.limit(1);
+    if (error) throw error;
+
+    if (format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv');
+      const nameStart = start || new Date().toISOString().split('T')[0];
+      const nameEnd = end || new Date().toISOString().split('T')[0];
+      res.setHeader('Content-Disposition', `attachment; filename="transacciones_${nameStart}_a_${nameEnd}.csv"`);
+
+      const header = fields.join(',') + '\n';
+      res.write(header);
+
+      const chunk = 1000;
+      const total = count || 0;
+      let offset = 0;
+
+      while (offset < total) {
+        const rangeEnd = Math.min(offset + chunk - 1, total - 1);
+        const { data: rows, error: e2 } = await base.range(offset, rangeEnd);
+        if (e2) throw e2;
+        const mapped = (rows || []).map(tx => ({
+          id: tx.id,
+          fecha: tx.created_at || tx.fecha || new Date().toISOString(),
+          cliente: tx.client_name || tx.cliente || '',
+          colaborador: tx.collaborator_name || tx.colaborador || '',
+          usdTotal: Number(tx.usd_total || tx.usdTotal || 0),
+          comision: Number(tx.commission || tx.comision || 0),
+          usdNeto: Number(tx.net_amount_usd || tx.usdNeto || tx.usd_neto || 0),
+          montoGs: Number(tx.amount_gs || tx.montoGs || tx.monto_gs || 0),
+          tasaUsada: Number(tx.exchange_rate || tx.tasaUsada || tx.tasa_usada || 0),
+          status: tx.status || 'completed',
+          chatId: tx.chat_id || tx.chatId,
+          idempotencyKey: tx.idempotency_key,
+          montoColaboradorUsd: Number(tx.monto_colaborador_usd || 0),
+          montoComisionGabrielUsd: Number(tx.monto_comision_gabriel_usd || 0)
+        }));
+        for (const row of mapped) {
+          const line = fields.map(f => {
+            const v = row[f];
+            if (v === undefined || v === null) return '';
+            const s = String(v);
+            return s.includes(',') ? `"${s.replace(/"/g,'""')}"` : s;
+          }).join(',') + '\n';
+          res.write(line);
+        }
+        offset += chunk;
+      }
+      res.end();
+      return;
+    }
+
+    res.status(400).json({ error: 'Formato no soportado' });
+  } catch (error) {
+    console.error('Error exporting transactions:', error);
+    res.status(500).json({ error: 'Error en exportación' });
+  }
+});
+
 app.post('/api/transactions', authenticateToken, sensitiveOperationsRateLimiter, async (req, res) => {
   try {
     const txData = req.body;

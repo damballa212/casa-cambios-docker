@@ -311,6 +311,28 @@ class ApiService {
     return this.fetchApi<Transaction[]>(`/transactions${qs}`);
   }
 
+  async getTransactionsPaged(params?: {
+    page?: number;
+    limit?: number;
+    start?: string;
+    end?: string;
+    collaborator?: string;
+    client?: string;
+    status?: string;
+    minUsd?: number;
+    maxUsd?: number;
+  }): Promise<{ data: Transaction[]; count: number; page: number; limit: number; hasNextPage: boolean; hasPrevPage: boolean }> {
+    const s = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value === undefined || value === null || value === '') return;
+        s.append(key, String(value));
+      });
+    }
+    const qs = s.toString() ? `?${s.toString()}` : '';
+    return this.fetchApi<{ data: Transaction[]; count: number; page: number; limit: number; hasNextPage: boolean; hasPrevPage: boolean }>(`/transactions/paged${qs}`);
+  }
+
   async createTransaction(transactionData: CreateTransactionRequest): Promise<{
     success: boolean;
     message: string;
@@ -459,6 +481,33 @@ class ApiService {
     }
     
     return this.fetchApi<ReportsSummary>(url);
+  }
+
+  async exportTransactionsCSV(params: {
+    start: string;
+    end: string;
+    collaborator?: string;
+    client?: string;
+    status?: string;
+    minUsd?: number;
+    maxUsd?: number;
+    fields?: string[];
+  }): Promise<Blob> {
+    const accessToken = this.getStoredToken();
+    const s = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v === undefined || v === null || v === '') return;
+      if (Array.isArray(v)) v.forEach(val => s.append(k, String(val))); else s.append(k, String(v));
+    });
+    s.append('format', 'csv');
+    const url = `${API_BASE_URL}/transactions/export?${s.toString()}`;
+    const response = await fetch(url, {
+      headers: {
+        ...(accessToken && { Authorization: `Bearer ${accessToken}` })
+      }
+    });
+    const blob = await response.blob();
+    return blob;
   }
 
   // Actividad reciente
