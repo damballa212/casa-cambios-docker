@@ -834,6 +834,22 @@ app.get('/api/dashboard/metrics', authenticateToken, requireRole(['admin', 'owne
         transactionsToday = merged.length;
         dailyVolume = merged.reduce((sum, tx) => sum + (Number(tx.usd_total) || 0), 0);
 
+        if (transactionsToday === 0) {
+          const { data: recent } = await supabase
+            .from('transactions')
+            .select('id, usd_total, created_at, fecha')
+            .order('created_at', { ascending: false })
+            .limit(200);
+          const sameDay = (recent || []).filter(tx => {
+            const d = new Date(tx.created_at || tx.fecha);
+            const a = new Intl.DateTimeFormat('en-CA', { timeZone: APP_TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+            const b = new Intl.DateTimeFormat('en-CA', { timeZone: APP_TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+            return a === b;
+          });
+          transactionsToday = sameDay.length;
+          dailyVolume = sameDay.reduce((sum, tx) => sum + (Number(tx.usd_total) || 0), 0);
+        }
+
         // Obtener tasa actual
         const { data: rateData } = await supabase
           .from('global_rate')
